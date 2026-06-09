@@ -16,6 +16,13 @@ import type Database from 'better-sqlite3';
 type PricingRow = [string, string, number | null, number | null];
 
 export const MODEL_PRICING: PricingRow[] = [
+  // OpenAI (official API prices)
+  ['openai', 'gpt-5.2', 1.75, 14.00],
+  ['openai', 'gpt-5.2-chat-latest', 1.75, 14.00],
+  ['openai', 'gpt-5.1', 1.25, 10.00],
+  ['openai', 'gpt-5-mini', 0.25, 2.00],
+  ['openai', 'gpt-4.1', 2.00, 8.00],
+
   // Cerebras
   ['cerebras', 'gpt-oss-120b', 0.039, 0.18],
   ['cerebras', 'llama3.1-8b', 0.02, 0.03],

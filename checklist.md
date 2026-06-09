@@ -1,0 +1,8 @@
+- [x] Create checklist
+- [x] Analyze project structure and files
+- [x] Identify app features and functions
+- [x] Check for any build issues or bugs
+- [x] Set up API key for online free models or OpenRouter
+- [x] Build the app
+- [x] Run the app
+- [x] Verify functionality

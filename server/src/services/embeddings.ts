@@ -113,6 +113,8 @@ async function openAiStyleEmbed(
 
 async function callProvider(row: EmbeddingModelRow, key: string, inputs: string[]): Promise<ProviderCallResult> {
   switch (row.platform) {
+    case 'openai':
+      return openAiStyleEmbed('https://api.openai.com/v1/embeddings', key, row.model_id, inputs);
     case 'google':
       return openAiStyleEmbed('https://generativelanguage.googleapis.com/v1beta/openai/embeddings', key, row.model_id, inputs);
     case 'nvidia':

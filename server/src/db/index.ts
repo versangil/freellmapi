@@ -58,6 +58,7 @@ export function initDb(dbPath?: string): Database.Database {
   migrateModelsV20KiloFree(db);
   migrateModelsV21PruneDead(db);
   migrateModelsV22Tools(db);
+  migrateModelsV23OpenAI(db);
   // After all model migrations: add/refresh paid-equivalent pricing
   // (drives the realistic "Est. savings" analytics stat).
   applyModelPricing(db);
@@ -163,6 +164,65 @@ function createTables(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+    CREATE TABLE IF NOT EXISTS playground_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_opened_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES playground_projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT 'New session',
+      selected_model TEXT NOT NULL DEFAULT 'auto',
+      full_access INTEGER NOT NULL DEFAULT 0,
+      auto_approval INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_playground_sessions_project ON playground_sessions(project_id);
+
+    CREATE TABLE IF NOT EXISTS playground_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      meta_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_playground_messages_session ON playground_messages(session_id, id);
+
+    CREATE TABLE IF NOT EXISTS playground_tool_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      tool_name TEXT NOT NULL,
+      arguments_json TEXT NOT NULL,
+      result_json TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_playground_tool_events_session ON playground_tool_events(session_id, id);
+
+    CREATE TABLE IF NOT EXISTS playground_file_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      before_content TEXT,
+      after_content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_playground_file_snapshots_session ON playground_file_snapshots(session_id, id);
+
+    CREATE TABLE IF NOT EXISTS playground_imported_skills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 
     CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at);
     CREATE INDEX IF NOT EXISTS idx_requests_platform ON requests(platform);
@@ -1725,6 +1785,37 @@ function migrateModelsV22Tools(db: Database.Database) {
   apply();
 }
 
+/**
+ * V23 (June 2026): OpenAI direct provider.
+ * Adds paid OpenAI API models as a first-class provider for users who want this
+ * router to include their own OpenAI key alongside free-tier providers. Model
+ * IDs are from the official OpenAI model docs current in June 2026.
+ */
+function migrateModelsV23OpenAI(db: Database.Database) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const additions: Array<[string, string, string, number, number, string, number | null, number | null, number | null, number | null, string, number | null]> = [
+    ['openai', 'gpt-5.2',             'GPT-5.2 (OpenAI)',             1, 5, 'Frontier', null, null, null, null, 'paid', 400000],
+    ['openai', 'gpt-5.2-chat-latest', 'GPT-5.2 Chat Latest (OpenAI)', 1, 6, 'Frontier', null, null, null, null, 'paid', 400000],
+    ['openai', 'gpt-5.1',             'GPT-5.1 (OpenAI)',             2, 5, 'Frontier', null, null, null, null, 'paid', 400000],
+    ['openai', 'gpt-5-mini',          'GPT-5 mini (OpenAI)',          8, 3, 'Medium',   null, null, null, null, 'paid', 400000],
+    ['openai', 'gpt-4.1',             'GPT-4.1 (OpenAI)',            12, 5, 'Large',    null, null, null, null, 'paid', 1047576],
+  ];
+
+  const apply = db.transaction(() => {
+    for (const a of additions) insert.run(...a);
+    backfillFallback(db);
+    db.prepare(`
+      UPDATE models SET supports_tools = 1
+      WHERE platform = 'openai'
+        AND model_id IN ('gpt-5.2', 'gpt-5.2-chat-latest', 'gpt-5.1', 'gpt-5-mini', 'gpt-4.1')
+    `).run();
+  });
+  apply();
+}
+
 // Embeddings V1 (2026-06): per-family embedding catalog. A "family" is one
 // model identity + dimension — vectors from different families live in
 // incompatible spaces, so /v1/embeddings only ever fails over WITHIN a family
@@ -1767,7 +1858,9 @@ function migrateEmbeddingsV1(db: Database.Database) {
     ['llama-nemotron-embed-1b-v2', 'nvidia', 'nvidia/llama-nemotron-embed-1b-v2', 'Nemotron Embed 1B', 2048, 8192, 1, 1, '~40 rpm'],
     ['nv-embedqa-e5-v5', 'nvidia', 'nvidia/nv-embedqa-e5-v5', 'NV-EmbedQA E5 v5', 1024, 512, 1, 1, '~40 rpm'],
     ['text-embedding-3-small', 'github', 'openai/text-embedding-3-small', 'Text Embedding 3 Small', 1536, 8191, 1, 1, 'rate-limited free'],
+    ['text-embedding-3-small', 'openai', 'text-embedding-3-small', 'Text Embedding 3 Small (OpenAI)', 1536, 8191, 2, 1, 'paid'],
     ['text-embedding-3-large', 'github', 'openai/text-embedding-3-large', 'Text Embedding 3 Large', 3072, 8191, 1, 1, 'rate-limited free'],
+    ['text-embedding-3-large', 'openai', 'text-embedding-3-large', 'Text Embedding 3 Large (OpenAI)', 3072, 8191, 2, 1, 'paid'],
     ['bge-m3', 'cloudflare', '@cf/baai/bge-m3', 'BGE-M3', 1024, 8192, 1, 1, '10K neurons/day (shared)'],
     ['bge-m3', 'huggingface', 'BAAI/bge-m3', 'BGE-M3 (HF)', 1024, 8192, 2, 1, '$0.10/mo credits'],
     ['embeddinggemma-300m', 'cloudflare', '@cf/google/embeddinggemma-300m', 'EmbeddingGemma 300M', 768, 2048, 1, 1, '10K neurons/day (shared)'],

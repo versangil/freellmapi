@@ -6,6 +6,7 @@
 // (see server/src/db/index.ts). HuggingFace was dropped in V4 and re-added
 // in V13 via the router.huggingface.co Inference Providers meta-router.
 export type Platform =
+  | 'openai'
   | 'google'
   | 'groq'
   | 'cerebras'
@@ -242,4 +243,61 @@ export interface RateLimitStatus {
   tpm: { used: number; limit: number | null };
   available: boolean;
   nextResetAt: string | null;
+}
+
+// ---- Playground Project Workspace Types ----
+
+export interface PlaygroundProject {
+  id: number;
+  name: string;
+  path: string;
+  createdAt: string;
+  lastOpenedAt: string;
+}
+
+export interface PlaygroundSession {
+  id: number;
+  projectId: number;
+  title: string;
+  selectedModel: string;
+  fullAccess: boolean;
+  autoApproval: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaygroundMessage {
+  id: number;
+  sessionId: number;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  meta?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface PlaygroundToolEvent {
+  id: number;
+  sessionId: number;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  result?: unknown;
+  status: 'success' | 'error';
+  createdAt: string;
+}
+
+export interface PlaygroundFileSnapshot {
+  id: number;
+  sessionId: number;
+  filePath: string;
+  beforeContent: string | null;
+  afterContent: string;
+  createdAt: string;
+}
+
+export interface PlaygroundImportedSkill {
+  id: number;
+  name: string;
+  path: string;
+  content: string;
+  createdAt: string;
 }

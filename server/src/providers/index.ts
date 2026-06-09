@@ -14,6 +14,13 @@ function register(provider: BaseProvider) {
 // Google - unique Gemini API format
 register(new GoogleProvider());
 
+// OpenAI - native OpenAI API, using the chat-completions-compatible surface
+register(new OpenAICompatProvider({
+  platform: 'openai',
+  name: 'OpenAI',
+  baseUrl: 'https://api.openai.com/v1',
+}));
+
 // Groq - OpenAI-compatible
 register(new OpenAICompatProvider({
   platform: 'groq',
