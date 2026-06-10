@@ -28,7 +28,9 @@ function getPollinationsKey(): string | null {
 
 function buildPollinationsUrl(type: 'image' | 'video', prompt: string, model?: string) {
   const url = new URL(`https://gen.pollinations.ai/${type}/${encodeURIComponent(prompt)}`);
-  url.searchParams.set('model', model ?? (type === 'image' ? 'flux' : 'seedance'));
+  if (model) {
+    url.searchParams.set('model', model);
+  }
   if (type === 'image') {
     url.searchParams.set('width', '1024');
     url.searchParams.set('height', '1024');
@@ -45,25 +47,18 @@ mediaRouter.post('/generate', async (req: Request, res: Response) => {
   }
 
   const key = getPollinationsKey();
-  if (!key || key === 'no-key') {
-    res.status(400).json({
-      error: {
-        message: 'Add an enabled Pollinations API key before generating images or videos.',
-        type: 'missing_provider_key',
-      },
-    });
-    return;
-  }
-
   const { type, prompt, model } = parsed.data;
   const url = buildPollinationsUrl(type, prompt, model);
-  url.searchParams.set('key', key);
+  if (key && key !== 'no-key') {
+    url.searchParams.set('key', key);
+  }
 
-  const upstream = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${key}`,
-    },
-  });
+  const headers: Record<string, string> = {};
+  if (key && key !== 'no-key') {
+    headers.Authorization = `Bearer ${key}`;
+  }
+
+  const upstream = await fetch(url, { headers });
 
   if (!upstream.ok) {
     const message = await upstream.text().catch(() => upstream.statusText);

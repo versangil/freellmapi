@@ -1,7 +1,8 @@
 import './env.js';
 import { createApp } from './app.js';
-import { initDb } from './db/index.js';
+import { initDb, getDb } from './db/index.js';
 import { startHealthChecker } from './services/health.js';
+
 
 const PORT = process.env.PORT ?? 3001;
 // Dual-stack ('::') by default so the dashboard is reachable over both IPv4
@@ -9,8 +10,20 @@ const PORT = process.env.PORT ?? 3001;
 // disabled fall back to IPv4-only below; HOST overrides the default outright.
 const HOST = process.env.HOST ?? '::';
 
+function startOldMessageCleanup() {
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const cleanup = () => {
+    const db = getDb();
+    const cutoffTime = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
+    db.prepare('DELETE FROM playground_messages WHERE created_at < ?').run(cutoffTime);
+  };
+  cleanup();
+  setInterval(cleanup, 24 * 60 * 60 * 1000);
+}
+
 async function main() {
   initDb();
+  startOldMessageCleanup();
   const app = createApp();
 
   const onReady = (host: string) => () => {
@@ -18,6 +31,7 @@ async function main() {
     console.log(`Server running on http://${display}:${PORT}`);
     console.log(`Proxy endpoint: http://${display}:${PORT}/v1/chat/completions`);
     startHealthChecker();
+
   };
 
   const server = app.listen(Number(PORT), HOST, onReady(HOST));

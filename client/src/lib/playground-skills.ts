@@ -60,7 +60,7 @@ export const playgroundSkills: PlaygroundSkill[] = [
     id: 'video',
     label: 'Video generation',
     shortLabel: 'Video',
-    model: 'seedance',
+    model: 'seedance-2.0',
     endpoint: 'https://gen.pollinations.ai/video',
     description: 'Routes motion prompts to a video model and returns a playable generation URL.',
     keywords: [

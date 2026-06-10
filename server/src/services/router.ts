@@ -79,6 +79,8 @@ export function recordRateLimitHit(modelDbId: number) {
   const existing = rateLimitPenalties.get(modelDbId);
   const now = Date.now();
   if (existing) {
+    const decaySteps = Math.floor((now - existing.lastHit) / DECAY_INTERVAL_MS);
+    existing.penalty = Math.max(0, existing.penalty - decaySteps * DECAY_AMOUNT);
     existing.count++;
     existing.lastHit = now;
     existing.penalty = Math.min(existing.penalty + PENALTY_PER_429, MAX_PENALTY);
@@ -102,25 +104,22 @@ export function recordSuccess(modelDbId: number) {
 
 /**
  * Get the current penalty for a model (with time-based decay).
+ * Pure read — does not mutate the entry; decay is applied lazily only when
+ * recording a new hit (recordRateLimitHit) so the clock isn't reset on every
+ * routing call.
  */
 function getPenalty(modelDbId: number): number {
   const entry = rateLimitPenalties.get(modelDbId);
   if (!entry) return 0;
 
-  // Apply time-based decay
-  const now = Date.now();
-  const elapsed = now - entry.lastHit;
+  const elapsed = Date.now() - entry.lastHit;
   const decaySteps = Math.floor(elapsed / DECAY_INTERVAL_MS);
-  if (decaySteps > 0) {
-    entry.penalty = Math.max(0, entry.penalty - (decaySteps * DECAY_AMOUNT));
-    entry.lastHit = now; // reset so we don't double-decay
-    if (entry.penalty === 0) {
-      rateLimitPenalties.delete(modelDbId);
-      return 0;
-    }
+  const decayed = Math.max(0, entry.penalty - decaySteps * DECAY_AMOUNT);
+  if (decayed === 0) {
+    rateLimitPenalties.delete(modelDbId);
+    return 0;
   }
-
-  return entry.penalty;
+  return decayed;
 }
 
 /**
@@ -135,6 +134,26 @@ export function getAllPenalties(): Array<{ modelDbId: number; count: number; pen
     }
   }
   return result.sort((a, b) => b.penalty - a.penalty);
+}
+
+// Memory map for recent general failures of a model.
+// Key: model_db_id -> { count, lastErrorTime }
+export const recentErrors = new Map<number, { count: number; lastErrorTime: number }>();
+const RECENT_ERROR_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+export function recordRecentError(modelDbId: number) {
+  const existing = recentErrors.get(modelDbId);
+  const now = Date.now();
+  if (existing) {
+    existing.count++;
+    existing.lastErrorTime = now;
+  } else {
+    recentErrors.set(modelDbId, { count: 1, lastErrorTime: now });
+  }
+}
+
+export function clearRecentErrors(modelDbId: number) {
+  recentErrors.delete(modelDbId);
 }
 
 // ── Routing strategy (persisted) ────────────────────────────────────────────
@@ -312,6 +331,21 @@ interface ScoredEntry {
   score: number;
 }
 
+function getRecentErrorFactor(modelDbId: number): number {
+  const entry = recentErrors.get(modelDbId);
+  if (!entry) return 1.0;
+  const elapsed = Date.now() - entry.lastErrorTime;
+  if (elapsed > RECENT_ERROR_WINDOW_MS) {
+    recentErrors.delete(modelDbId);
+    return 1.0;
+  }
+  const timeRatio = 1.0 - (elapsed / RECENT_ERROR_WINDOW_MS);
+  const penalty = Math.min(entry.count, 5);
+  const baseDamp = 0.2 / penalty;
+  const multiplier = baseDamp * (1.0 - timeRatio) + 0.05 * timeRatio;
+  return Math.max(0.01, Math.min(1.0, multiplier));
+}
+
 function scoreChainEntry(
   entry: ChainRow,
   weights: RoutingWeights,
@@ -340,7 +374,8 @@ function scoreChainEntry(
   const headroom = headroomFactor(stats?.monthlyUsedTokens ?? 0, budget);
   const rl = rateLimitFactor(getPenalty(entry.model_db_id));
 
-  const score = combineScore({ reliability, speed, intelligence, headroom, rateLimit: rl }, weights);
+  const baseScore = combineScore({ reliability, speed, intelligence, headroom, rateLimit: rl }, weights);
+  const score = baseScore * getRecentErrorFactor(entry.model_db_id);
   return { axes: { reliability, speed, intelligence }, headroom, rateLimit: rl, score };
 }
 
@@ -353,9 +388,13 @@ function scoreChainEntry(
 function orderChain(chain: ChainRow[], strategy: RoutingStrategy): ChainRow[] {
   const weights = weightsFor(strategy);
   if (!weights) {
-    // Legacy priority mode: base priority + 429 penalty, ascending.
+    // Legacy priority mode: base priority + 429 penalty + recent error penalty, ascending.
     return chain
-      .map(e => ({ e, eff: e.priority + getPenalty(e.model_db_id) }))
+      .map(e => {
+        const errEntry = recentErrors.get(e.model_db_id);
+        const errPenalty = errEntry && (Date.now() - errEntry.lastErrorTime < RECENT_ERROR_WINDOW_MS) ? 100 * errEntry.count : 0;
+        return { e, eff: e.priority + getPenalty(e.model_db_id) + errPenalty };
+      })
       .sort((a, b) => a.eff - b.eff || a.e.priority - b.e.priority)
       .map(x => x.e);
   }
@@ -387,7 +426,7 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy): ChainRow[] {
  * @param requireVision - only consider models that accept image input (#118)
  * @param requireTools - only consider models that emit structured tool_calls
  */
-export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false): RouteResult {
+export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>): RouteResult {
   const db = getDb();
 
   const strategy = getRoutingStrategy();
@@ -417,6 +456,12 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   }
 
   for (const entry of sortedChain) {
+    // Models the caller has ruled out for this request — e.g. a 404
+    // "model removed upstream" already seen this request: trying the same
+    // model again on a different key would just burn another attempt on the
+    // same dead route (PR #111, credits @barbotkonv).
+    if (skipModels?.has(entry.model_db_id)) continue;
+
     // Vision requests skip text-only models — including a sticky/preferred one,
     // which is correct: don't pin an image turn to a model that can't see it.
     if (requireVision && !entry.supports_vision) continue;
@@ -439,14 +484,22 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // gets the normal "all models exhausted" error rather than a wasted sweep.
     if (entry.context_window != null && estimatedTokens > entry.context_window) continue;
 
+    // Same guard for a model with a small per-minute token budget: a single
+    // request that alone exceeds tpm_limit can never fit one minute of quota and
+    // returns a guaranteed 413 (e.g. Groq gpt-oss-120b: 131k context but 8k TPM).
+    // estimatedTokens already includes reserved output, mirroring the check above.
+    if (entry.tpm_limit != null && estimatedTokens > entry.tpm_limit) continue;
+
     // Check if we have a provider for this platform
     const provider = getProvider(entry.platform as any);
     if (!provider) continue;
 
     // Get enabled keys that have not already failed validation or decryption.
-    const keys = db.prepare(
-      "SELECT * FROM api_keys WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')"
-    ).all(entry.platform) as KeyRow[];
+    const keys = db.prepare(`
+      SELECT * FROM api_keys
+      WHERE platform = ? AND enabled = 1 AND status IN ('healthy', 'unknown')
+      ORDER BY CASE status WHEN 'healthy' THEN 1 WHEN 'unknown' THEN 2 ELSE 3 END ASC
+    `).all(entry.platform) as KeyRow[];
 
     if (keys.length === 0) continue;
 

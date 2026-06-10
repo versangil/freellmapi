@@ -4,11 +4,11 @@ import type {
   ChatCompletionChunk,
   Platform,
 } from '@freellmapi/shared/types.js';
-import { BaseProvider, type CompletionOptions } from './base.js';
+import { BaseProvider, providerHttpError, type CompletionOptions } from './base.js';
 
 /**
  * Generic provider for platforms that use an OpenAI-compatible API.
- * Covers: Groq, Cerebras, SambaNova, NVIDIA NIM, Mistral, OpenRouter,
+ * Covers: Groq, Cerebras, NVIDIA NIM, Mistral, OpenRouter,
  * GitHub Models, Fireworks AI.
  */
 export class OpenAICompatProvider extends BaseProvider {
@@ -20,6 +20,10 @@ export class OpenAICompatProvider extends BaseProvider {
   /** Per-provider HTTP timeout override. Cloud APIs finish in ~15s; locally-hosted
    * inference (llama.cpp / vLLM on CPU) can take 30-120s for long prompts. Default 15000. */
   private readonly timeoutMs: number;
+  /** NVIDIA NIM models reject any request that permits parallel tool calls with
+   * `400 This model only supports single tool-calls at once!`. When set, pin
+   * parallel_tool_calls to false whenever tools are in play. See issue #255. */
+  private readonly forceSingleToolCall: boolean;
 
   constructor(opts: {
     platform: Platform;
@@ -29,6 +33,7 @@ export class OpenAICompatProvider extends BaseProvider {
     validateUrl?: string;
     timeoutMs?: number;
     keyless?: boolean;
+    forceSingleToolCall?: boolean;
   }) {
     super();
     this.platform = opts.platform;
@@ -38,6 +43,16 @@ export class OpenAICompatProvider extends BaseProvider {
     this.validateUrl = opts.validateUrl;
     this.timeoutMs = opts.timeoutMs ?? 15000;
     this.keyless = opts.keyless ?? false;
+    this.forceSingleToolCall = opts.forceSingleToolCall ?? false;
+  }
+
+  /** Resolve the parallel_tool_calls flag to send upstream. For providers that
+   * only accept single tool calls (NVIDIA NIM), force `false` whenever tools are
+   * present so the model never tries to emit two at once and 400s; otherwise pass
+   * the caller's value through unchanged. See issue #255. */
+  private resolveParallelToolCalls(options?: CompletionOptions): boolean | undefined {
+    if (this.forceSingleToolCall && options?.tools && options.tools.length > 0) return false;
+    return options?.parallel_tool_calls;
   }
 
   /** Keyless providers (Kilo's anonymous free tier) must send NO Authorization
@@ -53,6 +68,11 @@ export class OpenAICompatProvider extends BaseProvider {
     modelId: string,
     options?: CompletionOptions,
   ): Promise<ChatCompletionResponse> {
+    const isReasoningModel = modelId.includes('o1') || modelId.includes('o3') || modelId.startsWith('o1-') || modelId.startsWith('o3-');
+    const thinkingVal = options?.thinking ?? (isReasoningModel ? 'medium' : undefined);
+    // If thinkingVal is 'off' for a reasoning model, we don't send reasoning_effort (or send it as undefined, as OpenAI reasoning models require a reasoning effort or don't support 'off'). If supported, map reasoning_effort.
+    const reasoningEffort = isReasoningModel && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
+
     const res = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -63,18 +83,19 @@ export class OpenAICompatProvider extends BaseProvider {
       body: JSON.stringify({
         model: modelId,
         messages,
-        temperature: options?.temperature,
+        temperature: isReasoningModel ? undefined : options?.temperature,
         max_tokens: options?.max_tokens,
-        top_p: options?.top_p,
+        top_p: isReasoningModel ? undefined : options?.top_p,
         tools: options?.tools,
         tool_choice: options?.tool_choice,
-        parallel_tool_calls: options?.parallel_tool_calls,
+        parallel_tool_calls: this.resolveParallelToolCalls(options),
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       }),
-    }, this.timeoutMs);
+    }, options?.timeoutMs ?? this.timeoutMs);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(`${this.name} API error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
+      throw providerHttpError(res, `${this.name} API error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
     }
 
     let data: ChatCompletionResponse;
@@ -101,6 +122,10 @@ export class OpenAICompatProvider extends BaseProvider {
     modelId: string,
     options?: CompletionOptions,
   ): AsyncGenerator<ChatCompletionChunk> {
+    const isReasoningModel = modelId.includes('o1') || modelId.includes('o3') || modelId.startsWith('o1-') || modelId.startsWith('o3-');
+    const thinkingVal = options?.thinking ?? (isReasoningModel ? 'medium' : undefined);
+    const reasoningEffort = isReasoningModel && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
+
     const res = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -111,19 +136,20 @@ export class OpenAICompatProvider extends BaseProvider {
       body: JSON.stringify({
         model: modelId,
         messages,
-        temperature: options?.temperature,
+        temperature: isReasoningModel ? undefined : options?.temperature,
         max_tokens: options?.max_tokens,
-        top_p: options?.top_p,
+        top_p: isReasoningModel ? undefined : options?.top_p,
         tools: options?.tools,
         tool_choice: options?.tool_choice,
-        parallel_tool_calls: options?.parallel_tool_calls,
+        parallel_tool_calls: this.resolveParallelToolCalls(options),
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         stream: true,
       }),
     }, this.timeoutMs);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(`${this.name} API error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
+      throw providerHttpError(res, `${this.name} API error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
     }
 
     yield* this.readSseStream(res);

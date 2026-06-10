@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import type { Express } from 'express';
 import fs from 'fs';
 import os from 'os';
@@ -186,5 +186,77 @@ describe('Playground project workspace API', () => {
     const listed = await request(app, 'GET', '/api/playground/skills/imports');
     expect(listed.status).toBe(200);
     expect(listed.body).toHaveLength(1);
+  });
+
+  it('browses directory paths', async () => {
+    const browse = await request(app, 'GET', `/api/playground/browse?path=${encodeURIComponent(projectRoot)}`);
+    expect(browse.status).toBe(200);
+    expect(browse.body.currentPath).toBe(projectRoot);
+    expect(browse.body.directories.map((d: any) => d.name)).toContain('src');
+    expect(browse.body.files.map((f: any) => f.name)).toContain('package.json');
+  });
+
+  it('triggers auto-rename when user sends first message to a session with default title', async () => {
+    let fetchCalled = false;
+    const originalFetch = globalThis.fetch;
+    
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const urlStr = typeof url === 'string' ? url : (url as any).url;
+      if (urlStr.includes('/v1/chat/completions')) {
+        fetchCalled = true;
+        return {
+          ok: true,
+          json: () => Promise.resolve({
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: 'Refactor auth helper'
+              }
+            }]
+          }),
+        } as any;
+      }
+      return originalFetch(url, init);
+    });
+
+    const session = await request(app, 'POST', '/api/playground/sessions', {
+      title: 'New Conversation',
+    });
+    expect(session.status).toBe(201);
+    expect(session.body.title).toBe('New Conversation');
+
+    const message = await request(app, 'POST', `/api/playground/sessions/${session.body.id}/messages`, {
+      role: 'user',
+      content: 'Refactor the auth helper function in auth.ts to be more robust.',
+    });
+    expect(message.status).toBe(201);
+
+    // Wait a short moment for the async auto-rename fetch/update to execute
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    const loaded = await request(app, 'GET', `/api/playground/sessions/${session.body.id}`);
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.title).toBe('Refactor auth helper');
+    expect(fetchCalled).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it('persists and updates session thinking settings', async () => {
+    const session = await request(app, 'POST', '/api/playground/sessions', {
+      title: 'Thinking Test Session',
+    });
+    expect(session.status).toBe(201);
+    expect(session.body.thinking).toBe('medium'); // default
+
+    const updated = await request(app, 'PATCH', `/api/playground/sessions/${session.body.id}`, {
+      thinking: 'high',
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.thinking).toBe('high');
+
+    const loaded = await request(app, 'GET', `/api/playground/sessions/${session.body.id}`);
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.thinking).toBe('high');
   });
 });
