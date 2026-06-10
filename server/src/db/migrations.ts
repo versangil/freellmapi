@@ -37,7 +37,6 @@ export function migrateDbSchema(db: Database.Database) {
   migrateEmbeddingsV1(db);
   ensureUnifiedKey(db);
   ensurePlaygroundSessionsThinkingColumn(db);
-}
 
 function createTables(db: Database.Database) {
   db.exec(`

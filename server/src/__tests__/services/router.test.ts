@@ -186,7 +186,7 @@ describe('Router', () => {
 
   it('should prioritize healthy keys over unknown keys', () => {
     const db = getDb();
-    
+
     // Add an unknown key first, then a healthy key
     const googleUnknown = encrypt('google-unknown-key');
     db.prepare(`
