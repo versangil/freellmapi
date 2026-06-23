@@ -7,14 +7,14 @@ import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
 
 export const keysRouter = Router();
 
-// Active providers ΓÇö must match providers/index.ts registrations + shared/types.ts Platform.
+// Active providers — must match providers/index.ts registrations + shared/types.ts Platform.
 // Moonshot and MiniMax direct integrations were dropped in V4. HuggingFace
 // was dropped in V4 and re-added in V13 via the router.huggingface.co route.
 // SambaNova was dropped in V23 (free tier permanently retired).
 const PLATFORMS = [
   'google', 'groq', 'cerebras', 'nvidia', 'mistral',
   'openrouter', 'github', 'cohere', 'cloudflare', 'zhipu', 'ollama',
-  'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'custom',
+  'kilo', 'pollinations', 'llm7', 'huggingface', 'opencode', 'cline', 'custom',
 ] as const;
 
 // `key` is optional so keyless providers (Kilo's anonymous gateway) can be added
@@ -84,7 +84,7 @@ keysRouter.post('/', (req: Request, res: Response) => {
 
   const db = getDb();
 
-  // A keyless provider needs only one sentinel row ΓÇö re-enable an existing one
+  // A keyless provider needs only one sentinel row — re-enable an existing one
   // instead of piling up duplicates each time the user clicks "Add".
   if (isKeyless) {
     const existing = db.prepare('SELECT id FROM api_keys WHERE platform = ? LIMIT 1').get(platform) as { id: number } | undefined;
@@ -118,11 +118,11 @@ keysRouter.post('/', (req: Request, res: Response) => {
   });
 });
 
-// ΓöÇΓöÇ Custom OpenAI-compatible providers (#117, #212) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Custom OpenAI-compatible providers (#117, #212) ─────────────────────
 // User-configured endpoints (llama.cpp / LM Studio / vLLM / Ollama / any
 // OpenAI-compatible base_url). Each DISTINCT base_url gets its own 'custom'
 // api_keys row, and every registered model binds to its endpoint's key via
-// models.key_id ΓÇö so several custom providers coexist without overwriting
+// models.key_id — so several custom providers coexist without overwriting
 // each other (#212). Re-submitting an existing base_url updates its key/label;
 // re-registering an existing model id re-binds it to the submitted endpoint.
 const customProviderSchema = z.object({
@@ -225,7 +225,7 @@ keysRouter.delete('/:id', (req: Request, res: Response) => {
   const remove = db.transaction(() => {
     db.prepare('DELETE FROM api_keys WHERE id = ?').run(id);
     // Custom models exist only because POST /custom registered them alongside
-    // their endpoint key (#117) ΓÇö they can't route without it. Cascade away
+    // their endpoint key (#117) — they can't route without it. Cascade away
     // the models bound to THIS endpoint (#212); other custom providers keep
     // theirs. Legacy rows (key_id NULL) are swept once no custom keys remain,
     // so they never linger in the fallback chain forever (#189).

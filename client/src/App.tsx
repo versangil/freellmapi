@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { AuthGate } from '@/components/auth-gate'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { logout } from '@/lib/api'
 import KeysPage from '@/pages/KeysPage'
 import PlaygroundPage from '@/pages/PlaygroundPage'
@@ -198,12 +199,12 @@ function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/models/chat" replace />} />
                 <Route path="/models" element={<Navigate to="/models/chat" replace />} />
-                <Route path="/models/chat" element={<FallbackPage />} />
-                <Route path="/models/embeddings" element={<EmbeddingsPage />} />
-                <Route path="/playground" element={<PlaygroundPage />} />
-                <Route path="/keys" element={<KeysPage />} />
+                <Route path="/models/chat" element={<ErrorBoundary><FallbackPage /></ErrorBoundary>} />
+                <Route path="/models/embeddings" element={<ErrorBoundary><EmbeddingsPage /></ErrorBoundary>} />
+                <Route path="/playground" element={<ErrorBoundary><PlaygroundPage /></ErrorBoundary>} />
+                <Route path="/keys" element={<ErrorBoundary><KeysPage /></ErrorBoundary>} />
                 <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
                 <Route path="/test" element={<Navigate to="/playground" replace />} />
                 <Route path="/health" element={<Navigate to="/keys" replace />} />
               </Routes>

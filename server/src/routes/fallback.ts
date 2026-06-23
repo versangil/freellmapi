@@ -5,6 +5,7 @@ import { getDb } from '../db/index.js';
 import { getAllPenalties, getCustomWeights, getRoutingScores, getRoutingStrategy, setCustomWeights, setRoutingStrategy } from '../services/router.js';
 import { BANDIT_PRESETS, type RoutingStrategy } from '../services/scoring.js';
 import { parseBudget } from '../lib/budget.js';
+import { isFreeModel } from '../lib/models.js';
 
 export const fallbackRouter = Router();
 
@@ -50,10 +51,13 @@ fallbackRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const rows = db.prepare(`
     SELECT fc.model_db_id, fc.priority, fc.enabled,
+           fc.auto_disabled_until_ms, fc.auto_disabled_reason,
+           fc.unhealthy_count, fc.last_unhealthy_at_ms,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,
            m.speed_rank, m.size_label, m.rpm_limit, m.rpd_limit,
            m.monthly_token_budget, m.supports_vision, m.supports_tools,
-           m.context_window
+           m.context_window,
+           m.paid_input_per_m, m.paid_output_per_m
     FROM fallback_config fc
     JOIN models m ON m.id = fc.model_db_id
     ORDER BY fc.priority ASC
@@ -80,6 +84,11 @@ fallbackRouter.get('/', (_req: Request, res: Response) => {
       penalty: penalty?.penalty ?? 0,
       rateLimitHits: penalty?.count ?? 0,
       enabled: r.enabled === 1,
+      autoDisabled: r.auto_disabled_until_ms != null && r.auto_disabled_until_ms > Date.now(),
+      autoDisabledUntil: r.auto_disabled_until_ms ? new Date(r.auto_disabled_until_ms).toISOString() : null,
+      autoDisabledReason: r.auto_disabled_reason,
+      unhealthyCount: r.unhealthy_count ?? 0,
+      lastUnhealthyAt: r.last_unhealthy_at_ms ? new Date(r.last_unhealthy_at_ms).toISOString() : null,
       platform: r.platform,
       modelId: r.model_id,
       displayName: r.display_name,
@@ -93,6 +102,9 @@ fallbackRouter.get('/', (_req: Request, res: Response) => {
       supportsTools: r.supports_tools === 1,
       keyCount: keyCountMap.get(r.platform) ?? 0,
       contextWindow: r.context_window,
+      paidInputPerM: r.paid_input_per_m,
+      paidOutputPerM: r.paid_output_per_m,
+      isFree: isFreeModel(r.platform, r.model_id),
     };
   }));
 });

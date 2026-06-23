@@ -139,13 +139,92 @@ function createTables(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_rate_limit_usage_lookup ON rate_limit_usage(platform, model_id, key_id, kind, created_at_ms);
     CREATE INDEX IF NOT EXISTS idx_rate_limit_cooldowns_expires ON rate_limit_cooldowns(expires_at_ms);
     CREATE INDEX IF NOT EXISTS idx_api_keys_platform ON api_keys(platform);
+
+    -- Playground tables for the IDE-like chat/agent UI
+    CREATE TABLE IF NOT EXISTS playground_projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      last_opened_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES playground_projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT 'New session',
+      selected_model TEXT NOT NULL DEFAULT 'auto',
+      full_access INTEGER NOT NULL DEFAULT 0,
+      auto_approval INTEGER NOT NULL DEFAULT 0,
+      thinking TEXT NOT NULL DEFAULT 'medium',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      meta_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_file_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      before_content TEXT NOT NULL,
+      after_content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_imported_skills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS playground_tool_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+      tool_name TEXT NOT NULL,
+      arguments_json TEXT NOT NULL,
+      result_json TEXT,
+      status TEXT NOT NULL CHECK (status IN ('success', 'error')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   ensureRequestKeyIdColumn(db);
   ensureApiKeysBaseUrlColumn(db);
   ensureModelsKeyIdColumn(db);
+  ensureFallbackAutoHealthColumns(db);
   ensureRequestTtfbColumn(db);
   ensureRequestRequestedModelColumn(db);
+}
+
+// Runtime health automation for models in the fallback chain. These columns are
+// deliberately on fallback_config (not models.enabled) so automatic quarantine
+// never overwrites the user's explicit enable/disable choice.
+function ensureFallbackAutoHealthColumns(db: Database.Database) {
+  const columns = db.prepare('PRAGMA table_info(fallback_config)').all() as { name: string }[];
+  const has = (name: string) => columns.some(col => col.name === name);
+  if (!has('auto_disabled_until_ms')) {
+    db.prepare('ALTER TABLE fallback_config ADD COLUMN auto_disabled_until_ms INTEGER').run();
+  }
+  if (!has('auto_disabled_reason')) {
+    db.prepare('ALTER TABLE fallback_config ADD COLUMN auto_disabled_reason TEXT').run();
+  }
+  if (!has('unhealthy_count')) {
+    db.prepare('ALTER TABLE fallback_config ADD COLUMN unhealthy_count INTEGER NOT NULL DEFAULT 0').run();
+  }
+  if (!has('last_unhealthy_at_ms')) {
+    db.prepare('ALTER TABLE fallback_config ADD COLUMN last_unhealthy_at_ms INTEGER').run();
+  }
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_fallback_auto_disabled_until ON fallback_config(auto_disabled_until_ms)').run();
 }
 
 // `requested_model` is the model id the CLIENT pinned in the request body.
@@ -1927,4 +2006,7 @@ function ensurePlaygroundSessionsThinkingColumn(db: Database.Database) {
   } catch (err) {
     // Ignore if table does not exist yet during the early bootstrap.
   }
+}
+
+// Close migrateDbSchema — all helper functions above are nested inside it
 }

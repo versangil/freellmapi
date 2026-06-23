@@ -171,12 +171,18 @@ async function imageUrlToInlineData(url: string): Promise<{ mimeType: string; da
   }
   if (/^https?:\/\//i.test(url)) {
     try {
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0 || buf.length > MAX_IMAGE_BYTES) return null;
-      const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
-      return { mimeType, data: buf.toString('base64') };
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length === 0 || buf.length > MAX_IMAGE_BYTES) return null;
+        const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+        return { mimeType, data: buf.toString('base64') };
+      } finally {
+        clearTimeout(timeout);
+      }
     } catch {
       return null;
     }

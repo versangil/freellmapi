@@ -74,8 +74,22 @@ export function estimateTokenCost(
     groq: { input: 0.5, output: 2 },
     google: { input: 1, output: 5 },
     anthropic: { input: 3, output: 15 },
+    cerebras: { input: 0.04, output: 0.18 },
+    cloudflare: { input: 0.1, output: 0.32 },
+    cohere: { input: 2.5, output: 10 },
+    github: { input: 2, output: 8 },
+    huggingface: { input: 0.11, output: 0.8 },
+    kilo: { input: 0.09, output: 0.45 },
+    llm7: { input: 0.3, output: 0.9 },
+    mistral: { input: 0.5, output: 1.5 },
+    nvidia: { input: 0.1, output: 0.32 },
+    ollama: { input: 0.12, output: 0.37 },
+    openrouter: { input: 0.1, output: 0.32 },
+    pollinations: { input: 0.03, output: 0.14 },
+    zhipu: { input: 0.06, output: 0.4 },
+    opencode: { input: 0.1, output: 0.2 },
   };
-  const p = pricing[platform ?? ''] ?? { input: 1, output: 5 };
+  const p = pricing[platform ?? ''] ?? { input: 0.2, output: 0.8 };
   const inputPerM = p.input;
   const outputPerM = p.output;
   const cost = (promptTokens / 1e6) * inputPerM + (completionTokens / 1e6) * outputPerM;

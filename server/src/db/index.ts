@@ -51,6 +51,24 @@ export function regenerateUnifiedKey(): string {
   return key;
 }
 
+export function getFreeOnlyApiKey(): string {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'free_only_api_key'").get() as { value: string } | undefined;
+  if (!row) {
+    const key = `freellmapi-free-${crypto.randomBytes(24).toString('hex')}`;
+    db.prepare("INSERT INTO settings (key, value) VALUES ('free_only_api_key', ?)").run(key);
+    return key;
+  }
+  return row.value;
+}
+
+export function regenerateFreeOnlyKey(): string {
+  const db = getDb();
+  const key = `freellmapi-free-${crypto.randomBytes(24).toString('hex')}`;
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'free_only_api_key'").run(key);
+  return key;
+}
+
 // Generic key/value settings accessors (used by routing strategy, etc.).
 export function getSetting(key: string): string | undefined {
   const db = getDb();

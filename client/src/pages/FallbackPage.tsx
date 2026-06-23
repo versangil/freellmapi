@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, SlidersHorizontal, Copy, Check } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -46,6 +46,9 @@ interface FallbackEntry {
   supportsVision: boolean
   supportsTools: boolean
   keyCount: number
+  paidInputPerM: number | null
+  paidOutputPerM: number | null
+  isFree: boolean
 }
 
 type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'custom'
@@ -338,6 +341,13 @@ function RowContent({
   dragHandle?: ReactNode
   onToggle: (modelDbId: number, enabled: boolean) => void
 }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  function copyModelId(id: string) {
+    navigator.clipboard.writeText(id)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
   const guard = (row.headroom ?? 1) * (row.rateLimit ?? 1)
   return (
     <>
@@ -349,6 +359,21 @@ function RowContent({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm">{row.displayName}</span>
           <span className="text-xs text-muted-foreground">{row.platform}</span>
+          {row.isFree ? (
+            <span
+              title="Free tier — no API key or paid quota required"
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400"
+            >
+              Free
+            </span>
+          ) : (
+            <span
+              title="Uses paid quota from your provider API key"
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-600/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-400"
+            >
+              Premium
+            </span>
+          )}
           {row.supportsVision && (
             <span
               title="Accepts image input"
@@ -371,6 +396,23 @@ function RowContent({
           {row.totalRequests !== undefined && row.totalRequests > 0 && (
             <span className="text-[10px] text-muted-foreground/60 tabular-nums">{row.totalRequests} obs</span>
           )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[11px] font-mono text-muted-foreground/70 truncate max-w-[200px]" title={row.modelId}>
+            {row.modelId}
+          </span>
+          <button
+            onClick={() => copyModelId(row.modelId)}
+            className="inline-flex items-center justify-center rounded p-0.5 text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+            aria-label={`Copy model ID: ${row.modelId}`}
+            title="Copy model ID"
+          >
+            {copiedId === row.modelId ? (
+              <Check className="size-3" />
+            ) : (
+              <Copy className="size-3" />
+            )}
+          </button>
         </div>
         <div className="text-[11px] text-muted-foreground/70 tabular-nums mt-0.5">
           {row.monthlyTokenBudget} tok/mo

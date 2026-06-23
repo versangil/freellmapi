@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/index.js';
+import { isFreeModel } from '../lib/models.js';
 import { hasProvider } from '../providers/index.js';
 
 export const modelsRouter = Router();
@@ -46,6 +47,9 @@ modelsRouter.get('/', (_req: Request, res: Response) => {
     fallbackEnabled: m.fallback_enabled === 1,
     hasProvider: hasProvider(m.platform),
     keyCount: keyCountMap.get(m.platform) ?? 0,
+    paidInputPerM: m.paid_input_per_m,
+    paidOutputPerM: m.paid_output_per_m,
+    isFree: isFreeModel(m.platform, m.model_id),
   }));
 
   res.json(result);

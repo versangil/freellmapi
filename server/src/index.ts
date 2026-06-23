@@ -2,6 +2,7 @@ import './env.js';
 import { createApp } from './app.js';
 import { initDb, getDb } from './db/index.js';
 import { startHealthChecker } from './services/health.js';
+import { startAutoHealWorker } from './services/auto-heal-worker.js';
 
 
 const PORT = process.env.PORT ?? 3001;
@@ -14,7 +15,9 @@ function startOldMessageCleanup() {
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
   const cleanup = () => {
     const db = getDb();
-    const cutoffTime = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
+    // Convert to SQLite datetime format (space separator, no timezone) so
+    // lexicographic comparison works with `datetime('now')` default values.
+    const cutoffTime = new Date(Date.now() - THIRTY_DAYS_MS).toISOString().slice(0, 19).replace('T', ' ');
     db.prepare('DELETE FROM playground_messages WHERE created_at < ?').run(cutoffTime);
   };
   cleanup();
@@ -31,7 +34,7 @@ async function main() {
     console.log(`Server running on http://${display}:${PORT}`);
     console.log(`Proxy endpoint: http://${display}:${PORT}/v1/chat/completions`);
     startHealthChecker();
-
+    startAutoHealWorker();
   };
 
   const server = app.listen(Number(PORT), HOST, onReady(HOST));

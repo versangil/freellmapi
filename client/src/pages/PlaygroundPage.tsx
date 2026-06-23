@@ -25,9 +25,12 @@ import {
   Trash2,
   WandSparkles,
   X,
+  Square,
   Zap,
   Layers,
   Brackets,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { apiFetch, getToken, estimateTokenCost } from '@/lib/api'
 import {
@@ -51,6 +54,7 @@ interface FallbackEntry {
   displayName: string
   keyCount: number
   contextWindow?: number | null
+  isFree: boolean
 }
 
 interface PlaygroundProject {
@@ -86,6 +90,8 @@ interface PlaygroundMessage {
 interface PlaygroundSessionDetail extends PlaygroundSession {
   project: PlaygroundProject | null
   messages: PlaygroundMessage[]
+  fileSnapshots: any[]
+  toolEvents: any[]
 }
 
 interface ImportedSkill {
@@ -115,6 +121,7 @@ interface ChatRequestBody {
   tools: typeof toolDefinitions
   tool_choice: 'auto'
   thinking?: 'off' | 'low' | 'medium' | 'high'
+  stream?: boolean
 }
 
 const codingSkills = [
@@ -295,6 +302,12 @@ function revokeMessageAssets(messages: PlaygroundMessage[]) {
   })
 }
 
+function isImageRelatedError(errorText: string | undefined): boolean {
+  if (!errorText) return false
+  const lower = errorText.toLowerCase()
+  return lower.includes('image') || lower.includes('vision') || lower.includes('picture') || lower.includes('png') || lower.includes('jpeg') || lower.includes('base64')
+}
+
 export default function PlaygroundPage() {
   const queryClient = useQueryClient()
   const [projectPath, setProjectPath] = useState('')
@@ -309,26 +322,27 @@ export default function PlaygroundPage() {
   } | null>(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamingContent, setStreamingContent] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState('auto')
   const [modelSearchQuery, setModelSearchQuery] = useState('')
   const [modelOpen, setModelOpen] = useState(false)
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['implement'])
   const [skillPath, setSkillPath] = useState('')
   const [toolActivity, setToolActivity] = useState<string[]>([])
-const [leftOpen, setLeftOpen] = useState(true)
-   const [rightOpen, setRightOpen] = useState(true)
-   const [pinnedProjects, setPinnedProjects] = useState<Set<number>>(() => {
-     const saved = typeof window !== 'undefined' ? localStorage.getItem('playground-pinned-projects') : null
-     return saved ? new Set(JSON.parse(saved)) : new Set()
-   })
-   const [pinnedSessions, setPinnedSessions] = useState<Set<number>>(() => {
-     const saved = typeof window !== 'undefined' ? localStorage.getItem('playground-pinned-sessions') : null
-     return saved ? new Set(JSON.parse(saved)) : new Set()
-   })
-const [compactView, setCompactView] = useState(() => {
-      if (typeof window === 'undefined') return false
-      return localStorage.getItem('playground-compact-view') === 'true'
-    })
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const [pinnedProjects, setPinnedProjects] = useState<Set<number>>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('playground-pinned-projects') : null
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  })
+  const [pinnedSessions, setPinnedSessions] = useState<Set<number>>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('playground-pinned-sessions') : null
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  })
+  const [compactView, setCompactView] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('playground-compact-view') === 'true'
+  })
 
     useEffect(() => {
       try {
@@ -337,11 +351,6 @@ const [compactView, setCompactView] = useState(() => {
         }
       } catch {}
     }, [compactView])
-   function isImageRelatedError(errorText: string | undefined): boolean {
-    if (!errorText) return false
-    const lower = errorText.toLowerCase()
-    return lower.includes('image') || lower.includes('vision') || lower.includes('picture') || lower.includes('png') || lower.includes('jpeg') || lower.includes('base64')
-  }
   const [expandedProjects, setExpandedProjects] = useState<Set<number>>(() => new Set())
   const [undoState, setUndoState] = useState<{ type: 'project' | 'session'; id: number; name: string; payload: any; secondsLeft?: number } | null>(null)
   const undoTimerRef = useRef<number | null>(null)
@@ -358,6 +367,16 @@ const [compactView, setCompactView] = useState(() => {
     if (typeof window === 'undefined') return ''
     return localStorage.getItem('playground-plan-text') ?? ''
   })
+  const [wideLayout, setWideLayout] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('playground-wide-layout') === 'true'
+  })
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('playground-wide-layout', String(wideLayout))
+    } catch {}
+  }, [wideLayout])
 
   useEffect(() => {
     try {
@@ -383,9 +402,18 @@ const [compactView, setCompactView] = useState(() => {
     handleSend()
   }
 
+  function handleStop() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setStreamingContent(null)
+  }
+
   const undoCountdownRef = useRef<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<PlaygroundMessage[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const { data: keyData } = useQuery<{ apiKey: string }>({
     queryKey: ['unified-key'],
@@ -764,51 +792,183 @@ async function deleteSession(sessionId: number) {
     }
   }
 
-  async function runAgentTurn(seedMessages: PlaygroundMessage[], sessionId = effectiveSessionId) {
-    if (!sessionId) return
+  /** Stream one round of the agent loop. Returns the assistant message + usage or null on abort. */
+  async function streamRound(
+    wireMessages: WireMessage[],
+    sessionId: number,
+    signal: AbortSignal,
+  ): Promise<{
+    content: string
+    toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }>
+    platform?: string
+    model?: string
+    usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }
+    latency: number
+  } | null> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Session-Id': `playground-${sessionId}` }
     if (keyData?.apiKey) headers.Authorization = `Bearer ${keyData.apiKey}`
     const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+    const body: ChatRequestBody = {
+      messages: wireMessages,
+      tools: activeSessionProject ? toolDefinitions : [],
+      tool_choice: 'auto',
+      thinking: activeSession?.thinking ?? 'medium',
+      stream: true,
+    }
+    if (selectedModel !== 'auto' && selectedModel !== 'auto-free') body.model = selectedModel
+
+    const start = Date.now()
+    const res = await fetch(`${base}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal })
+    // Capture model+platform from X-Routed-Via header (format: "platform/modelId")
+    let platform: string | undefined
+    let model: string | undefined
+    const routedHeader = res.headers.get('X-Routed-Via')
+    if (routedHeader) {
+      const slashIdx = routedHeader.indexOf('/')
+      if (slashIdx !== -1) {
+        platform = routedHeader.slice(0, slashIdx)
+        model = routedHeader.slice(slashIdx + 1)
+      }
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }))
+      const errorMessage = { role: 'assistant' as const, content: `Error: ${err.error?.message ?? 'Unknown error'}` }
+      setMessages(current => [...current, errorMessage])
+      await saveMessage(errorMessage, sessionId)
+      return null
+    }
+
+    const reader = res.body?.getReader()
+    if (!reader) {
+      const errorMessage = { role: 'assistant' as const, content: 'Error: No response body from stream' }
+      setMessages(current => [...current, errorMessage])
+      await saveMessage(errorMessage, sessionId)
+      return null
+    }
+
+    // SSE line decoder
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let accumulatedContent = ''
+    const toolCalls: Map<number, { id?: string; name?: string; args: string }> = new Map()
+    let usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
+
+    const flushLine = (line: string) => {
+      if (!line.startsWith('data: ')) return
+      const payload = line.slice(6).trim()
+      if (payload === '[DONE]') return
+
+      let parsed: any
+      try { parsed = JSON.parse(payload) } catch { return }
+
+      const delta = parsed.choices?.[0]?.delta
+      if (!delta) return
+
+      // Capture model from standard SSE chunk fields
+      if (parsed.model && !model) model = parsed.model
+      if (parsed.usage) {
+        usage = {
+          promptTokens: parsed.usage.prompt_tokens,
+          completionTokens: parsed.usage.completion_tokens,
+          totalTokens: parsed.usage.total_tokens,
+        }
+      }
+
+      if (delta.content) {
+        accumulatedContent += delta.content
+        setStreamingContent(accumulatedContent)
+      }
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          let entry = toolCalls.get(tc.index)
+          if (!entry) {
+            entry = { args: '' }
+            toolCalls.set(tc.index, entry)
+          }
+          if (tc.id) entry.id = tc.id
+          if (tc.function?.name) entry.name = tc.function.name
+          if (tc.function?.arguments) entry.args += tc.function.arguments
+        }
+      }
+    }
+
+    // Read the stream
+    let streamExhausted = false
+    while (!streamExhausted) {
+      const { done, value } = await reader.read()
+      if (done) { streamExhausted = true; break }
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const l of lines) flushLine(l)
+    }
+    // Flush remaining buffer
+    if (buffer.trim()) flushLine(buffer)
+
+    const latency = Date.now() - start
+
+    // Build final tool call list
+    const finalToolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = []
+    for (const entry of toolCalls.values()) {
+      if (entry.id && entry.name) {
+        let parsedArgs: Record<string, unknown>
+        try { parsedArgs = JSON.parse(entry.args) } catch { parsedArgs = {} }
+        finalToolCalls.push({ id: entry.id, name: entry.name, args: parsedArgs })
+      }
+    }
+
+    return { content: accumulatedContent, toolCalls: finalToolCalls, platform, model, usage, latency }
+  }
+
+  async function runAgentTurn(seedMessages: PlaygroundMessage[], sessionId = effectiveSessionId) {
+    if (!sessionId) return
     let wireMessages: WireMessage[] = [
       { role: 'system', content: systemPrompt(activeSessionProject, selectedSkills, importedSkills, claudeMdContent) },
       ...seedMessages.filter(m => m.role !== 'system' && !m.asset).map(m => ({ role: m.role, content: m.content })),
     ]
 
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
     for (let round = 0; round < 5; round++) {
-      const body: ChatRequestBody = {
-        messages: wireMessages,
-        tools: activeSessionProject ? toolDefinitions : [],
-        tool_choice: 'auto',
-        thinking: activeSession?.thinking ?? 'medium'
-      }
-      if (selectedModel !== 'auto') body.model = selectedModel
-      const start = Date.now()
-      const res = await fetch(`${base}/v1/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }))
-        const errorMessage = { role: 'assistant' as const, content: `Error: ${err.error?.message ?? 'Unknown error'}` }
-        setMessages(current => [...current, errorMessage])
-        await saveMessage(errorMessage, sessionId)
+      if (abortController.signal.aborted) {
+        setStreamingContent(null)
         return
       }
-      const data = await res.json()
-      const assistant = data.choices?.[0]?.message
-      const calls = assistant?.tool_calls ?? []
-      const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
-      if (calls.length === 0) {
-        const latency = Date.now() - start
-        const promptTokens = usage?.prompt_tokens
-        const completionTokens = usage?.completion_tokens
-        const totalTokens = usage?.total_tokens ?? ((promptTokens ?? 0) + (completionTokens ?? 0))
+
+      const result = await streamRound(wireMessages, sessionId, abortController.signal)
+      if (!result) {
+        // streamRound already saved an error message
+        setStreamingContent(null)
+        return
+      }
+      if (abortController.signal.aborted) {
+        setStreamingContent(null)
+        return
+      }
+
+      setStreamingContent(null)
+
+      // Resolve pricing from routed model/platform metadata
+      const pricingPlatform = result.platform
+      const pricingModel = result.model
+      const costEstimate = estimateTokenCost(pricingPlatform, pricingModel, result.usage?.promptTokens, result.usage?.completionTokens)
+
+      if (result.toolCalls.length === 0) {
+        // Final text response
+        const latency = result.latency
+        const promptTokens = result.usage?.promptTokens
+        const completionTokens = result.usage?.completionTokens
+        const totalTokens = result.usage?.totalTokens ?? ((promptTokens ?? 0) + (completionTokens ?? 0))
         const tokensPerSec = completionTokens && latency > 0 ? Number(((completionTokens / latency) * 1000).toFixed(1)) : undefined
-        const pricingRow = availableModels.find(model => model.modelId === selectedModel) ? [availableModels.find(model => model.modelId === selectedModel)!.platform ?? 'kilo', selectedModel] : null
-        const costEstimate = estimateTokenCost(pricingRow?.[0], pricingRow?.[1], promptTokens, completionTokens)
+
         const finalMessage: PlaygroundMessage = {
           role: 'assistant',
-          content: assistant?.content ?? '',
+          content: result.content,
           meta: {
-            platform: data._routed_via?.platform,
-            model: data._routed_via?.model,
+            platform: result.platform,
+            model: result.model,
             latency,
             usage: { promptTokens, completionTokens, totalTokens },
             tokensPerSec,
@@ -817,21 +977,31 @@ async function deleteSession(sessionId: number) {
         }
         setMessages(current => [...current, finalMessage])
         await saveMessage(finalMessage, sessionId)
+        abortControllerRef.current = null
         return
       }
 
-      wireMessages = [...wireMessages, { role: 'assistant', content: assistant.content ?? null, tool_calls: calls }]
-      for (const call of calls) {
-        const toolName = call.function.name as ToolName
-        const args = JSON.parse(call.function.arguments || '{}')
-        const result = await executeTool(toolName, args, sessionId)
-        wireMessages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
+      // Tool calls — push assistant message + execute tools sequentially
+      wireMessages = [
+        ...wireMessages,
+        { role: 'assistant', content: result.content || null, tool_calls: result.toolCalls.map(tc => ({ id: tc.id, type: 'function' as const, function: { name: tc.name, arguments: JSON.stringify(tc.args) } })) },
+      ]
+
+      for (const tc of result.toolCalls) {
+        if (abortController.signal.aborted) {
+          setStreamingContent(null)
+          return
+        }
+        const toolResult = await executeTool(tc.name as ToolName, tc.args, sessionId)
+        wireMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolResult) })
       }
     }
 
+    // Exceeded max rounds
     const finalMessage = { role: 'assistant' as const, content: 'Stopped after 5 tool rounds. Please narrow the request and try again.' }
     setMessages(current => [...current, finalMessage])
     await saveMessage(finalMessage, sessionId)
+    abortControllerRef.current = null
   }
 
   async function handleSend() {
@@ -927,6 +1097,8 @@ async function deleteSession(sessionId: number) {
 
   const activeModelLabel = selectedModel === 'auto'
     ? 'Auto'
+    : selectedModel === 'auto-free'
+    ? 'Auto Free'
     : availableModels.find(m => m.modelId === selectedModel)?.displayName ?? selectedModel
 
   function AssistantBubble({
@@ -934,11 +1106,13 @@ async function deleteSession(sessionId: number) {
     asset,
     meta,
     compactView,
+    wideLayout,
   }: {
     content: string
     asset?: PlaygroundMessage['asset']
     meta?: Record<string, unknown>
     compactView: boolean
+    wideLayout: boolean
   }) {
     const [expanded, setExpanded] = useState(false)
 
@@ -960,7 +1134,7 @@ async function deleteSession(sessionId: number) {
     const displayContent = isTruncated ? content.split('\n').slice(0, 6).join('\n') + '...' : content
 
     return (
-      <div className="max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-muted">
+      <div className={cn("rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-muted break-words overflow-wrap-anywhere", wideLayout ? "max-w-[95%]" : "max-w-[82%]")}>
         <Markdown>{displayContent}</Markdown>
         {isTruncated && (
           <button
@@ -1047,11 +1221,16 @@ async function deleteSession(sessionId: number) {
         </div>
         <div className="flex items-center gap-2">
           <Popover open={modelOpen} onOpenChange={setModelOpen}>
-            <PopoverTrigger className="w-[280px] h-9 px-3 py-2 inline-flex items-center justify-between text-left font-normal border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-lg text-sm transition-colors outline-none focus:ring-1 focus:ring-ring">
+            <PopoverTrigger className="sm:w-[280px] w-full max-w-full h-9 px-3 py-2 inline-flex items-center justify-between text-left font-normal border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-lg text-sm transition-colors outline-none focus:ring-1 focus:ring-ring">
               {selectedModel === 'auto' ? (
                 <div className="flex items-baseline gap-1.5 overflow-hidden">
                   <span className="text-sm font-medium truncate">Auto</span>
                   <span className="text-[10px] text-muted-foreground font-light shrink-0">fallback chain</span>
+                </div>
+              ) : selectedModel === 'auto-free' ? (
+                <div className="flex items-baseline gap-1.5 overflow-hidden">
+                  <span className="text-sm font-medium truncate">Auto Free</span>
+                  <span className="text-[10px] text-muted-foreground font-light shrink-0">free models only</span>
                 </div>
               ) : (() => {
                 const m = availableModels.find(m => m.modelId === selectedModel);
@@ -1065,7 +1244,7 @@ async function deleteSession(sessionId: number) {
               })()}
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[300px] p-2 bg-popover border shadow-lg rounded-xl">
+            <PopoverContent align="end" className="sm:w-[300px] w-[calc(100vw-32px)] max-w-[calc(100vw-32px)] p-2 bg-popover border shadow-lg rounded-xl">
               <div className="relative mb-2">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground opacity-50" />
                 <Input
@@ -1097,7 +1276,27 @@ async function deleteSession(sessionId: number) {
                   </button>
                 )}
 
-                {/* Filtered models */}
+                {/* Auto Free option */}
+                {('auto free'.includes(modelSearchQuery.toLowerCase()) || 'free models'.includes(modelSearchQuery.toLowerCase())) && (
+                  <button
+                    key="auto-free"
+                    onClick={() => {
+                      setSelectedModel('auto-free');
+                      patchSession({ selectedModel: 'auto-free' });
+                      setModelOpen(false);
+                      setModelSearchQuery('');
+                    }}
+                    className={cn(
+                      "w-full flex items-baseline justify-between px-2.5 py-1.5 rounded-lg text-left transition-colors text-sm hover:bg-muted/80",
+                      selectedModel === 'auto-free' ? "bg-muted font-medium" : "text-foreground"
+                    )}
+                  >
+                    <span className="text-sm">Auto Free</span>
+                    <span className="text-[10px] text-emerald-500 font-light">free models only</span>
+                  </button>
+                )}
+
+                {/* Filtered models with free/premium tags */}
                 {filteredModels.map(m => (
                   <button
                     key={m.modelDbId}
@@ -1112,12 +1311,19 @@ async function deleteSession(sessionId: number) {
                       selectedModel === m.modelId ? "bg-muted font-medium" : "text-foreground"
                     )}
                   >
-                    <span className="text-sm">{m.displayName}</span>
-                    <span className="text-[10px] text-muted-foreground font-light">{m.platform}</span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm truncate">{m.displayName}</span>
+                      {m.isFree ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">Free</span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">Premium</span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-light shrink-0 ml-2">{m.platform}</span>
                   </button>
                 ))}
 
-                {filteredModels.length === 0 && !('auto'.includes(modelSearchQuery.toLowerCase()) || 'fallback chain'.includes(modelSearchQuery.toLowerCase())) && (
+                {filteredModels.length === 0 && !('auto'.includes(modelSearchQuery.toLowerCase()) || 'fallback chain'.includes(modelSearchQuery.toLowerCase()) || 'auto free'.includes(modelSearchQuery.toLowerCase()) || 'free models'.includes(modelSearchQuery.toLowerCase())) && (
                   <div className="py-6 text-center text-sm text-muted-foreground">No models found.</div>
                 )}
               </div>
@@ -1132,7 +1338,7 @@ async function deleteSession(sessionId: number) {
         {leftOpen && (
           <>
             <div className="fixed inset-0 z-20 bg-background/40 backdrop-blur-sm lg:hidden" onClick={() => setLeftOpen(false)} />
-            <aside className="absolute lg:relative left-0 top-0 bottom-0 z-30 flex min-h-0 w-[280px] flex-col border-r bg-sidebar lg:border-b-0">
+            <aside className={cn("absolute lg:relative left-0 top-0 bottom-0 z-30 flex min-h-0 flex-col border-r bg-sidebar lg:border-b-0", wideLayout ? "w-[220px]" : "w-[280px]")}>
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
@@ -1232,7 +1438,7 @@ async function deleteSession(sessionId: number) {
                                       className={cn('flex-1 truncate rounded px-2 py-1.5 text-left text-xs hover:bg-muted', isSessionActive && 'bg-muted font-medium')}
                                     >
                                       <div className="truncate">{session.title}</div>
-                                      <div className="text-[10px] text-muted-foreground">{session.fullAccess ? 'Full' : 'Safe'} · {session.autoApproval ? 'Auto' : 'Manual'}</div>
+                                      <div className="text-[10px] text-muted-foreground">{session.fullAccess ? 'Full' : 'Safe'} · {session.autoApproval ? 'Auto appr.' : 'Manual'}</div>
                                     </button>
                                     <Button
                                       size="icon-xs"
@@ -1280,7 +1486,7 @@ async function deleteSession(sessionId: number) {
                             className={cn('flex-1 truncate rounded px-2 py-1.5 text-left text-xs hover:bg-muted', isActive && 'bg-muted font-medium')}
                           >
                             <div className="truncate">{session.title}</div>
-                            <div className="text-[10px] text-muted-foreground">{session.fullAccess ? 'Full' : 'Safe'} · {session.autoApproval ? 'Auto' : 'Manual'}</div>
+                            <div className="text-[10px] text-muted-foreground">{session.fullAccess ? 'Full' : 'Safe'} · {session.autoApproval ? 'Auto appr.' : 'Manual'}</div>
                           </button>
                           <Button
                             size="icon-xs"
@@ -1365,8 +1571,8 @@ async function deleteSession(sessionId: number) {
                 </Button>
               )}
               {activeSession && (
-                <div className="flex items-center gap-3 text-xs">
-                  <label className="flex items-center gap-1.5 font-medium text-muted-foreground select-none">
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <label className="flex items-center gap-1.5 font-medium text-muted-foreground select-none whitespace-nowrap">
                     <span>Thinking:</span>
                     <select
                       value={activeSession.thinking ?? 'medium'}
@@ -1379,13 +1585,13 @@ async function deleteSession(sessionId: number) {
                       <option value="high">High</option>
                     </select>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
+                  <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
                     <Switch checked={activeSession.fullAccess} onCheckedChange={v => patchSession({ fullAccess: v })} />
-                    <span className="hidden md:inline font-medium text-muted-foreground select-none">Full access</span>
+                    <span className="font-medium text-muted-foreground select-none">Full access</span>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
+                  <label className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
                     <Switch checked={activeSession.autoApproval} onCheckedChange={v => patchSession({ autoApproval: v })} />
-                    <span className="hidden md:inline font-medium text-muted-foreground select-none">Auto approval</span>
+                    <span className="font-medium text-muted-foreground select-none">Auto approval</span>
                   </label>
                 </div>
               )}
@@ -1418,18 +1624,49 @@ async function deleteSession(sessionId: number) {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                 {messages.filter(m => m.role !== 'system' && m.role !== 'tool').map((msg, i) => (
-                   <div key={`${msg.id ?? i}-${msg.role}`} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-{msg.role === 'assistant' && msg.meta ? (
-                        <AssistantBubble content={msg.content} asset={msg.asset} meta={msg.meta} compactView={compactView} />
-                      ) : (
-                       <div className={cn('max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
-                         {msg.role === 'assistant' ? <Markdown>{msg.content}</Markdown> : <div className="whitespace-pre-wrap">{msg.content}</div>}
+                 {messages.filter(m => m.role !== 'system').map((msg, i) => {
+                   if (msg.role === 'tool') {
+                     // Collapsible tool result
+                     return (
+                       <div key={`${msg.id ?? i}-tool`} className="flex justify-start">
+                         <details className="max-w-[90%] rounded-2xl px-3 py-2 text-xs leading-relaxed bg-muted/50 border break-words overflow-wrap-anywhere">
+                           <summary className="cursor-pointer font-mono text-muted-foreground hover:text-foreground select-none">
+                             <ChevronRight className="inline size-3 mr-1" />Tool result
+                           </summary>
+                           <pre className="mt-1.5 max-h-48 overflow-y-auto text-[10px] font-mono text-muted-foreground whitespace-pre-wrap">{msg.content?.slice(0, 2000)}{(msg.content?.length ?? 0) > 2000 ? '... (truncated)' : ''}</pre>
+                         </details>
                        </div>
-                     )}
-                   </div>
-                 ))}
-                {loading && <div className="text-sm text-muted-foreground">Working through model and project tools...</div>}
+                     )
+                   }
+                   return (
+                     <div key={`${msg.id ?? i}-${msg.role}`} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+{msg.role === 'assistant' && msg.meta ? (
+                         <AssistantBubble content={msg.content} asset={msg.asset} meta={msg.meta} compactView={compactView} wideLayout={wideLayout} />
+                       ) : (
+                        <div className={cn('rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words overflow-wrap-anywhere', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', wideLayout ? 'max-w-[95%]' : 'max-w-[82%]')}>
+                          {msg.role === 'assistant' ? <Markdown>{msg.content}</Markdown> : <div className="whitespace-pre-wrap">{msg.content}</div>}
+                        </div>
+                      )}
+                    </div>
+                    )
+                  })}
+                {loading && streamingContent !== null && (
+                  <div className="flex justify-start">
+                    <div className={cn("rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-muted break-words overflow-wrap-anywhere", wideLayout ? "max-w-[95%]" : "max-w-[82%]")}>
+                      <Markdown>{streamingContent}</Markdown>
+                      <span className="inline-block w-1.5 h-4 bg-primary/60 ml-0.5 animate-pulse" />
+                    </div>
+                  </div>
+                )}
+                {loading && (
+                  <div className="flex items-center gap-2 justify-center">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="inline-block size-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="inline-block size-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="inline-block size-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -1519,6 +1756,16 @@ async function deleteSession(sessionId: number) {
               />
               <Button
                 type="button"
+                variant={wideLayout ? 'default' : 'outline'}
+                size="icon"
+                onClick={() => setWideLayout(v => !v)}
+                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                className="shrink-0"
+              >
+                {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+              </Button>
+              <Button
+                type="button"
                 variant={compactView ? 'default' : 'outline'}
                 size="icon"
                 onClick={() => setCompactView(v => !v)}
@@ -1526,17 +1773,24 @@ async function deleteSession(sessionId: number) {
               >
                 <span className="text-xs font-bold">C</span>
               </Button>
-              <Button onClick={handleSend} disabled={loading || !input.trim()} className="gap-2">
-                <Send className="size-4" />
-                <span className="hidden sm:inline">Send</span>
-              </Button>
+              {loading ? (
+                <Button onClick={handleStop} variant="destructive" className="gap-2">
+                  <Square className="size-4" />
+                  <span className="hidden sm:inline">Stop</span>
+                </Button>
+              ) : (
+                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2">
+                  <Send className="size-4" />
+                  <span className="hidden sm:inline">Send</span>
+                </Button>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
               <span className="font-medium text-foreground/80">Model: {activeModelLabel}</span>
               {activeSessionProject && <span className="truncate">Project: {activeSessionProject.name}</span>}
               {activeSession && (
                 <span>
-                  Mode: {activeSession.fullAccess ? 'Full access' : 'Safe'} · {activeSession.autoApproval ? 'Auto' : 'Manual'}
+                  Mode: {activeSession.fullAccess ? 'Full access' : 'Safe'} · {activeSession.autoApproval ? 'Auto appr.' : 'Manual'}
                 </span>
               )}
               {(() => {
@@ -1555,7 +1809,7 @@ async function deleteSession(sessionId: number) {
         {rightOpen && (
           <>
             <div className="fixed inset-0 z-20 bg-background/40 backdrop-blur-sm lg:hidden" onClick={() => setRightOpen(false)} />
-            <aside className="absolute lg:relative right-0 top-0 bottom-0 z-30 flex min-h-0 w-[300px] flex-col border-l bg-background shadow-lg shrink-0">
+            <aside className={cn("absolute lg:relative right-0 top-0 bottom-0 z-30 flex min-h-0 flex-col border-l bg-background shadow-lg shrink-0", wideLayout ? "w-[220px]" : "w-[300px]")}>
           <div className="border-b p-3">
             <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium">
               <div className="flex items-center gap-2">
@@ -1934,5 +2188,3 @@ async function deleteSession(sessionId: number) {
     </div>
   )
 }
-
-

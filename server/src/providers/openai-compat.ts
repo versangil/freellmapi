@@ -6,6 +6,11 @@ import type {
 } from '@freellmapi/shared/types.js';
 import { BaseProvider, providerHttpError, type CompletionOptions } from './base.js';
 
+/** Detect OpenAI o-series reasoning models (o1, o3) which force reasoning_effort. */
+function isReasoningModel(modelId: string): boolean {
+  return modelId.includes('o1') || modelId.includes('o3') || modelId.startsWith('o1-') || modelId.startsWith('o3-');
+}
+
 /**
  * Generic provider for platforms that use an OpenAI-compatible API.
  * Covers: Groq, Cerebras, NVIDIA NIM, Mistral, OpenRouter,
@@ -68,10 +73,9 @@ export class OpenAICompatProvider extends BaseProvider {
     modelId: string,
     options?: CompletionOptions,
   ): Promise<ChatCompletionResponse> {
-    const isReasoningModel = modelId.includes('o1') || modelId.includes('o3') || modelId.startsWith('o1-') || modelId.startsWith('o3-');
-    const thinkingVal = options?.thinking ?? (isReasoningModel ? 'medium' : undefined);
+    const thinkingVal = options?.thinking ?? (isReasoningModel(modelId) ? 'medium' : undefined);
     // If thinkingVal is 'off' for a reasoning model, we don't send reasoning_effort (or send it as undefined, as OpenAI reasoning models require a reasoning effort or don't support 'off'). If supported, map reasoning_effort.
-    const reasoningEffort = isReasoningModel && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
+    const reasoningEffort = isReasoningModel(modelId) && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
 
     const res = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -83,9 +87,9 @@ export class OpenAICompatProvider extends BaseProvider {
       body: JSON.stringify({
         model: modelId,
         messages,
-        temperature: isReasoningModel ? undefined : options?.temperature,
+        temperature: isReasoningModel(modelId) ? undefined : options?.temperature,
         max_tokens: options?.max_tokens,
-        top_p: isReasoningModel ? undefined : options?.top_p,
+        top_p: isReasoningModel(modelId) ? undefined : options?.top_p,
         tools: options?.tools,
         tool_choice: options?.tool_choice,
         parallel_tool_calls: this.resolveParallelToolCalls(options),
@@ -122,9 +126,8 @@ export class OpenAICompatProvider extends BaseProvider {
     modelId: string,
     options?: CompletionOptions,
   ): AsyncGenerator<ChatCompletionChunk> {
-    const isReasoningModel = modelId.includes('o1') || modelId.includes('o3') || modelId.startsWith('o1-') || modelId.startsWith('o3-');
-    const thinkingVal = options?.thinking ?? (isReasoningModel ? 'medium' : undefined);
-    const reasoningEffort = isReasoningModel && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
+    const thinkingVal = options?.thinking ?? (isReasoningModel(modelId) ? 'medium' : undefined);
+    const reasoningEffort = isReasoningModel(modelId) && thinkingVal && thinkingVal !== 'off' ? thinkingVal : undefined;
 
     const res = await this.fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -136,9 +139,9 @@ export class OpenAICompatProvider extends BaseProvider {
       body: JSON.stringify({
         model: modelId,
         messages,
-        temperature: isReasoningModel ? undefined : options?.temperature,
+        temperature: isReasoningModel(modelId) ? undefined : options?.temperature,
         max_tokens: options?.max_tokens,
-        top_p: isReasoningModel ? undefined : options?.top_p,
+        top_p: isReasoningModel(modelId) ? undefined : options?.top_p,
         tools: options?.tools,
         tool_choice: options?.tool_choice,
         parallel_tool_calls: this.resolveParallelToolCalls(options),

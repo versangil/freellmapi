@@ -3,15 +3,16 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import type { ChatMessage, ModelListRow } from '@freellmapi/shared/types.js';
-import { routeRequest, recordRateLimitHit, recordSuccess, hasEnabledVisionModel, hasEnabledToolsModel, type RouteResult, clearRecentErrors, recordRecentError } from '../services/router.js';
+import { contentToString, messageHasImage, normalizeOutboundContent } from '../lib/content.js';
+import { routeRequest, recordRateLimitHit, recordSuccess, hasEnabledVisionModel, hasEnabledToolsModel, type RouteResult, clearRecentErrors, recordRecentError, recordModelHealthFailure } from '../services/router.js';
 import { recordRequest, recordTokens, setCooldown, getCooldownDurationForLimit, PAYMENT_REQUIRED_COOLDOWN_MS, MODEL_FORBIDDEN_COOLDOWN_MS } from '../services/ratelimit.js';
 import { pruneRequestAnalytics } from '../services/request-retention.js';
 import { runEmbeddings, EmbeddingsError } from '../services/embeddings.js';
-import { getDb, getUnifiedApiKey } from '../db/index.js';
-import { contentToString, messageHasImage, normalizeOutboundContent } from '../lib/content.js';
+import { getDb, getUnifiedApiKey, getFreeOnlyApiKey } from '../db/index.js';
 import { repairToolArguments, toolSchemaMap } from '../lib/tool-args.js';
 import { sanitizeProviderErrorMessage } from '../lib/error-redaction.js';
 import { rescueInlineToolCalls, startsWithDialectMarker, couldBecomeDialectMarker, containsDialectMarker } from '../lib/tool-call-rescue.js';
+import { isFreeModel } from '../lib/models.js';
 
 export const proxyRouter = Router();
 
@@ -20,9 +21,14 @@ export const proxyRouter = Router();
 // Requesting this id means "let the router decide" — identical to omitting
 // `model` entirely.
 const AUTO_MODEL_ID = 'auto';
+const AUTO_FREE_MODEL_ID = 'auto-free';
 
 function isAutoModel(modelId: string | undefined): boolean {
-  return modelId === AUTO_MODEL_ID;
+  return modelId === AUTO_MODEL_ID || modelId === AUTO_FREE_MODEL_ID;
+}
+
+function isAutoFreeModel(modelId: string | undefined): boolean {
+  return modelId === AUTO_FREE_MODEL_ID;
 }
 
 // Constant-time string comparison for the unified API key. Plain `===` leaks
@@ -120,10 +126,12 @@ export function setStickyModel(messages: ChatMessage[], modelDbId: number, sessi
 proxyRouter.get('/models', (req: Request, res: Response) => {
   const token = extractApiToken(req);
   const unifiedKey = getUnifiedApiKey();
-  if (!token || !timingSafeStringEqual(token, unifiedKey)) {
+  const freeOnlyKey = getFreeOnlyApiKey();
+  if (!token || (!timingSafeStringEqual(token, unifiedKey) && !timingSafeStringEqual(token, freeOnlyKey))) {
     res.status(401).json({ error: { message: 'Invalid API key', type: 'authentication_error' } });
     return;
   }
+  const isFreeOnly = timingSafeStringEqual(token, freeOnlyKey);
 
   const db = getDb();
   const models = db.prepare(`
@@ -147,6 +155,10 @@ proxyRouter.get('/models', (req: Request, res: Response) => {
     ORDER BY intelligence_rank ASC, id ASC
   `).all() as ModelListRow[];
 
+  const filteredModels = isFreeOnly
+    ? models.filter(m => isFreeModel(m.platform, m.model_id))
+    : models;
+
   res.json({
     object: 'list',
     data: [
@@ -158,7 +170,15 @@ proxyRouter.get('/models', (req: Request, res: Response) => {
         name: 'Auto (router picks the best available model)',
         context_window: null,
       },
-      ...models.map(m => ({
+      {
+        id: AUTO_FREE_MODEL_ID,
+        object: 'model',
+        created: 0,
+        owned_by: 'freellmapi',
+        name: 'Auto Free (router picks the best free model only)',
+        context_window: null,
+      },
+      ...filteredModels.map(m => ({
         id: m.model_id,
         object: 'model',
         created: 0,
@@ -413,7 +433,8 @@ const EmbeddingsBody = z.object({
 proxyRouter.post('/embeddings', async (req: Request, res: Response) => {
   const token = extractApiToken(req);
   const unifiedKey = getUnifiedApiKey();
-  if (!token || !timingSafeStringEqual(token, unifiedKey)) {
+  const freeOnlyKey = getFreeOnlyApiKey();
+  if (!token || (!timingSafeStringEqual(token, unifiedKey) && !timingSafeStringEqual(token, freeOnlyKey))) {
     res.status(401).json({ error: { message: 'Invalid API key', type: 'authentication_error' } });
     return;
   }
@@ -432,10 +453,11 @@ proxyRouter.post('/embeddings', async (req: Request, res: Response) => {
       provider: result.platform,
       usage: { prompt_tokens: result.inputTokens, total_tokens: result.inputTokens },
     });
-  } catch (err: any) {
-    const status = err instanceof EmbeddingsError ? err.status : 502;
+  } catch (err) {
+    const e = err as any;
+    const status = e instanceof EmbeddingsError ? e.status : 502;
     const type = status === 400 ? 'invalid_request_error' : status === 429 ? 'rate_limit_error' : 'server_error';
-    res.status(status).json({ error: { message: `embedding error: ${err?.message ?? 'unknown'}`, type } });
+    res.status(status).json({ error: { message: `embedding error: ${e?.message ?? 'unknown'}`, type } });
   }
 });
 
@@ -447,12 +469,14 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   // not a reliable authorization boundary.
   const token = extractApiToken(req);
   const unifiedKey = getUnifiedApiKey();
-  if (!token || !timingSafeStringEqual(token, unifiedKey)) {
+  const freeOnlyKey = getFreeOnlyApiKey();
+  if (!token || (!timingSafeStringEqual(token, unifiedKey) && !timingSafeStringEqual(token, freeOnlyKey))) {
     res.status(401).json({
       error: { message: 'Invalid API key', type: 'authentication_error' },
     });
     return;
   }
+  const isFreeOnlyKeyUsed = timingSafeStringEqual(token, freeOnlyKey);
 
   // Validate request
   const parsed = chatCompletionSchema.safeParse(req.body);
@@ -475,6 +499,9 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   }
 
   const { model: requestedModel, temperature, top_p, stream, thinking } = parsed.data;
+  // Auto-free model restricts routing to free models, even when using the
+  // standard unified key. Free-only API key always restricts to free models.
+  const isFreeOnly = isFreeOnlyKeyUsed || isAutoFreeModel(requestedModel);
   // Agent-tolerant knob normalization (#200): max_tokens <= 0 means "no
   // limit" in several clients → unset; tool_choice 'any' is OpenAI's
   // 'required'; tool definitions get their 'function' type re-defaulted.
@@ -668,8 +695,9 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     let route: RouteResult;
     try {
-      route = routeRequest(estimatedTotal, skipKeys.size > 0 ? skipKeys : undefined, preferredModel, hasImage, wantsTools, skipModels.size > 0 ? skipModels : undefined);
-    } catch (err: any) {
+      route = routeRequest(estimatedTotal, skipKeys.size > 0 ? skipKeys : undefined, preferredModel, hasImage, wantsTools, skipModels.size > 0 ? skipModels : undefined, isFreeOnly);
+    } catch (err) {
+      const e = err as any;
       // No more models available
       if (lastError) {
         const safeLastError = sanitizeProviderErrorMessage(lastError.message);
@@ -680,8 +708,8 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
           },
         });
       } else {
-        res.status(err.status ?? 503).json({
-          error: { message: err.message, type: 'routing_error' },
+        res.status(e.status ?? 503).json({
+          error: { message: e.message, type: 'routing_error' },
         });
       }
       return;
@@ -922,10 +950,12 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         const respMsg = result.choices?.[0]?.message;
         const respText = contentToString(respMsg?.content ?? '');
         if (!respText && (respMsg?.tool_calls?.length ?? 0) === 0) {
-          logRequest(route.platform, route.modelId, route.keyId, 'error', estimatedInputTokens, 0, Date.now() - start, 'empty completion (no content, no tool_calls)', null, pinnedModelId);
+          const emptyReason = 'empty completion (no content, no tool_calls)';
+          logRequest(route.platform, route.modelId, route.keyId, 'error', estimatedInputTokens, 0, Date.now() - start, emptyReason, null, pinnedModelId);
           skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
           setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }));
           recordRateLimitHit(route.modelDbId);
+          recordModelHealthFailure(route.modelDbId, emptyReason, 'transient');
           lastError = new Error(`empty completion from ${route.displayName}`);
           continue;
         }
@@ -986,13 +1016,14 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         );
         return;
       }
-    } catch (err: any) {
+    } catch (err) {
+      const e = err as any;
       const latency = Date.now() - start;
-      const safeError = sanitizeProviderErrorMessage(err.message);
+      const safeError = sanitizeProviderErrorMessage(e.message);
       logRequest(route.platform, route.modelId, route.keyId, 'error', estimatedInputTokens, 0, latency, safeError, null, pinnedModelId);
       recordRecentError(route.modelDbId);
 
-      if (isRetryableError(err)) {
+      if (isRetryableError(e)) {
         // Model-level 404 (removed/deprecated upstream): rule the whole model
         // out for the rest of this request — its other keys would 404 the same
         // way. The per-key cooldown below still applies, so cross-request
@@ -1000,7 +1031,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         // 404 (removed upstream) and 403 (model off-limits to this key's tier)
         // both rule the model out: a sibling key on the same platform would
         // fail it identically, so skip it for the rest of this request.
-        if (isModelNotFoundError(err) || isModelAccessForbiddenError(err)) skipModels.add(route.modelDbId);
+        if (isModelNotFoundError(e) || isModelAccessForbiddenError(e)) skipModels.add(route.modelDbId);
 
         // Put this model+key on cooldown and try the next one
         const skipId = `${route.platform}:${route.modelId}:${route.keyId}`;
@@ -1009,20 +1040,20 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
           route.platform,
           route.modelId,
           route.keyId,
-          isPaymentRequiredError(err)
+          isPaymentRequiredError(e)
             ? PAYMENT_REQUIRED_COOLDOWN_MS
             // A 403 won't clear on the next window (it's a tier/subscription gate,
             // not a transient limit), so bench this model+key for a day like a 402
             // instead of re-trying it every request. See issue #256.
-            : isModelAccessForbiddenError(err)
+            : isModelAccessForbiddenError(e)
             ? MODEL_FORBIDDEN_COOLDOWN_MS
             : getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, {
                 rpd: route.rpdLimit,
                 tpd: route.tpdLimit,
-              }, err.retryAfterMs),
+              }, e.retryAfterMs),
         );
         recordRateLimitHit(route.modelDbId);
-        lastError = err;
+        lastError = e;
         console.log(`[Proxy] ${safeError.slice(0, 60)} from ${route.displayName}, falling back (attempt ${attempt + 1}/${MAX_RETRIES})`);
         continue;
       }

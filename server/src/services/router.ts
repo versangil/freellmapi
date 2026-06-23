@@ -1,5 +1,6 @@
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import { getProvider, resolveProvider } from '../providers/index.js';
+import { isFreeModel } from '../lib/models.js';
 import { decrypt } from '../lib/crypto.js';
 import { canMakeRequest, canUseTokens, isOnCooldown, canUseProvider } from './ratelimit.js';
 import {
@@ -43,6 +44,10 @@ interface ChainRow {
   // Custom models bind to the api_keys row carrying their endpoint (#212);
   // NULL for built-in platforms.
   key_id: number | null;
+  auto_disabled_until_ms: number | null;
+  auto_disabled_reason: string | null;
+  unhealthy_count: number;
+  last_unhealthy_at_ms: number | null;
 }
 
 export interface RouteResult {
@@ -93,6 +98,7 @@ export function recordRateLimitHit(modelDbId: number) {
  * Record a success for a model — reduces its penalty so it rises back up.
  */
 export function recordSuccess(modelDbId: number) {
+  clearModelHealthFailure(modelDbId);
   const existing = rateLimitPenalties.get(modelDbId);
   if (existing) {
     existing.penalty = Math.max(0, existing.penalty - 1);
@@ -140,6 +146,86 @@ export function getAllPenalties(): Array<{ modelDbId: number; count: number; pen
 // Key: model_db_id -> { count, lastErrorTime }
 export const recentErrors = new Map<number, { count: number; lastErrorTime: number }>();
 const RECENT_ERROR_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+const TRANSIENT_HEALTH_WINDOW_MS = 15 * 60 * 1000;
+const TRANSIENT_AUTO_DISABLE_MS = 15 * 60 * 1000;
+const MODEL_UNAVAILABLE_AUTO_DISABLE_MS = 24 * 60 * 60 * 1000;
+const TRANSIENT_AUTO_DISABLE_THRESHOLD = 3;
+
+function truncateReason(reason: string): string {
+  return reason.replace(/\s+/g, ' ').trim().slice(0, 240);
+}
+
+export type ModelHealthFailureKind = 'transient' | 'unavailable';
+
+/**
+ * Persistently quarantine unhealthy models from routing without touching the
+ * user's manual enabled flags. Model-unavailable failures (404/no endpoints,
+ * tier-forbidden 403) are benched immediately; transient failures only auto-
+ * disable after repeated failures inside a short rolling window.
+ */
+export function recordModelHealthFailure(
+  modelDbId: number,
+  reason: string,
+  kind: ModelHealthFailureKind = 'transient',
+): { count: number; autoDisabledUntilMs: number | null } {
+  const db = getDb();
+  const now = Date.now();
+  const row = db.prepare(`
+    SELECT unhealthy_count, last_unhealthy_at_ms
+    FROM fallback_config
+    WHERE model_db_id = ?
+  `).get(modelDbId) as { unhealthy_count: number; last_unhealthy_at_ms: number | null } | undefined;
+
+  const previousCount = row && row.last_unhealthy_at_ms != null && now - row.last_unhealthy_at_ms <= TRANSIENT_HEALTH_WINDOW_MS
+    ? row.unhealthy_count
+    : 0;
+  const count = kind === 'unavailable' ? Math.max(previousCount + 1, TRANSIENT_AUTO_DISABLE_THRESHOLD) : previousCount + 1;
+  const autoDisabledUntilMs = kind === 'unavailable'
+    ? now + MODEL_UNAVAILABLE_AUTO_DISABLE_MS
+    : count >= TRANSIENT_AUTO_DISABLE_THRESHOLD
+    ? now + TRANSIENT_AUTO_DISABLE_MS
+    : null;
+
+  db.prepare(`
+    UPDATE fallback_config
+       SET unhealthy_count = ?,
+           last_unhealthy_at_ms = ?,
+           auto_disabled_until_ms = CASE
+             WHEN ? IS NULL THEN auto_disabled_until_ms
+             WHEN auto_disabled_until_ms IS NULL OR auto_disabled_until_ms < ? THEN ?
+             ELSE auto_disabled_until_ms
+           END,
+           auto_disabled_reason = CASE
+             WHEN ? IS NULL THEN auto_disabled_reason
+             ELSE ?
+           END
+     WHERE model_db_id = ?
+  `).run(
+    count,
+    now,
+    autoDisabledUntilMs,
+    autoDisabledUntilMs,
+    autoDisabledUntilMs,
+    autoDisabledUntilMs,
+    truncateReason(reason),
+    modelDbId,
+  );
+
+  return { count, autoDisabledUntilMs };
+}
+
+export function clearModelHealthFailure(modelDbId: number): void {
+  const db = getDb();
+  db.prepare(`
+    UPDATE fallback_config
+       SET unhealthy_count = 0,
+           last_unhealthy_at_ms = NULL,
+           auto_disabled_until_ms = NULL,
+           auto_disabled_reason = NULL
+     WHERE model_db_id = ?
+  `).run(modelDbId);
+}
 
 export function recordRecentError(modelDbId: number) {
   const existing = recentErrors.get(modelDbId);
@@ -425,8 +511,10 @@ function orderChain(chain: ChainRow[], strategy: RoutingStrategy): ChainRow[] {
  * @param preferredModelDbId - try this model first (sticky session)
  * @param requireVision - only consider models that accept image input (#118)
  * @param requireTools - only consider models that emit structured tool_calls
+ * @param skipModels - set of model_db_id to skip (already failed this request)
+ * @param freeOnly - if true, only route to free models (default: false)
  */
-export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>): RouteResult {
+export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number, requireVision = false, requireTools = false, skipModels?: Set<number>, freeOnly = false): RouteResult {
   const db = getDb();
 
   const strategy = getRoutingStrategy();
@@ -435,6 +523,8 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   // Get the enabled fallback chain joined with the fields the scorer needs.
   const chain = db.prepare(`
     SELECT fc.model_db_id, fc.priority, fc.enabled,
+           fc.auto_disabled_until_ms, fc.auto_disabled_reason,
+           fc.unhealthy_count, fc.last_unhealthy_at_ms,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,
            m.size_label, m.monthly_token_budget,
            m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit, m.supports_vision,
@@ -442,9 +532,14 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     FROM fallback_config fc
     JOIN models m ON m.id = fc.model_db_id AND m.enabled = 1
     WHERE fc.enabled = 1
-  `).all() as ChainRow[];
+      AND (fc.auto_disabled_until_ms IS NULL OR fc.auto_disabled_until_ms <= ?)
+  `).all(Date.now()) as ChainRow[];
 
-  const sortedChain = orderChain(chain, strategy);
+  // Filter to free-only models if requested
+  let sortedChain = orderChain(chain, strategy);
+  if (freeOnly) {
+    sortedChain = sortedChain.filter(e => isFreeModel(e.platform, e.model_id));
+  }
 
   // Sticky session: move preferred model to front of chain
   if (preferredModelDbId) {
@@ -612,10 +707,12 @@ export function getRoutingScores(): { strategy: RoutingStrategy; weights: Routin
 
   const chain = db.prepare(`
     SELECT fc.model_db_id, fc.priority, fc.enabled,
+           fc.auto_disabled_until_ms, fc.auto_disabled_reason,
+           fc.unhealthy_count, fc.last_unhealthy_at_ms,
            m.platform, m.model_id, m.display_name, m.intelligence_rank,
            m.size_label, m.monthly_token_budget,
            m.rpm_limit, m.rpd_limit, m.tpm_limit, m.tpd_limit, m.supports_vision,
-           m.supports_tools, m.context_window
+           m.supports_tools, m.context_window, m.key_id
     FROM fallback_config fc
     JOIN models m ON m.id = fc.model_db_id
     WHERE m.enabled = 1

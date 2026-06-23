@@ -169,6 +169,20 @@ register(new OpenAICompatProvider({
   baseUrl: 'https://opencode.ai/zen/v1',
 }));
 
+// Cline API — OpenAI-compatible aggregator. Model IDs follow the
+// provider/model-name format (e.g. anthropic/claude-sonnet-4-6). Requires
+// a paid API key from app.cline.bot — no free tier. Sends referral headers
+// for usage attribution.
+register(new OpenAICompatProvider({
+  platform: 'cline',
+  name: 'Cline API',
+  baseUrl: 'https://api.cline.bot/api/v1',
+  extraHeaders: {
+    'HTTP-Referer': 'http://localhost:3001',
+    'X-Title': 'FreeLLMAPI',
+  },
+}));
+
 // Chutes was evaluated for V11 and dropped: probe with a free-tier key
 // returned 402 on every model — "Quota exceeded and account balance is
 // $0.0, please pay with fiat or send tao". The "free" tier requires a

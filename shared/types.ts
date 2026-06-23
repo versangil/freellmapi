@@ -27,6 +27,10 @@ export type Platform =
   // OpenCode Zen — OpenAI-compatible gateway. Free promotional models require a
   // free (no-card) account key from opencode.ai/auth; see migrateModelsV18.
   | 'opencode'
+  // Cline API — OpenAI-compatible aggregator (api.cline.bot/api/v1). Model IDs
+  // follow provider/model-name format (e.g. anthropic/claude-sonnet-4-6). Paid
+  // API key from app.cline.bot — no free tier.
+  | 'cline'
   // User-configured OpenAI-compatible endpoint (llama.cpp, LM Studio, vLLM,
   // Ollama, any base_url). The endpoint URL lives on the api_keys row; see #117.
   | 'custom';

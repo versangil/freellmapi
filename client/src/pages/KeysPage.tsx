@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { PageHeader } from '@/components/page-header'
 import type { ApiKey, Platform } from '../../../shared/types'
-import { Pencil, ExternalLink } from 'lucide-react'
+import { Pencil, ExternalLink, Zap, Sparkles } from 'lucide-react'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
 
 // Small "Get API key" external link shown next to a provider (#137).
@@ -51,7 +51,13 @@ const PLATFORMS: { value: Platform; label: string; url: string; keyless?: boolea
   { value: 'llm7', label: 'LLM7 (anon ok)', url: 'https://llm7.io' },
   { value: 'huggingface', label: 'HuggingFace Router', url: 'https://huggingface.co/settings/tokens' },
   { value: 'opencode', label: 'OpenCode Zen (free key)', url: 'https://opencode.ai/auth' },
+  { value: 'cline', label: 'Cline API', url: 'https://app.cline.bot' },
 ]
+
+// Quick-add presets — grouped so users can one-click enable keyless providers
+// or jump to the key form for providers that need an API key.
+const KEYLESS_PRESETS = PLATFORMS.filter(p => p.keyless)
+const KEY_REQUIRED_PRESETS = PLATFORMS.filter(p => !p.keyless)
 
 // 'custom' is configured through its own form (base URL + model), not the
 // generic key dropdown — but it still appears in the grouped provider list.
@@ -172,6 +178,174 @@ function UnifiedKeySection() {
   )
 }
 
+function FreeOnlyKeySection() {
+  const queryClient = useQueryClient()
+  const [showKey, setShowKey] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const { data, isError } = useQuery<{ apiKey: string }>({
+    queryKey: ['free-only-key'],
+    queryFn: () => apiFetch('/api/settings/free-api-key'),
+  })
+
+  const regenerate = useMutation({
+    mutationFn: () => apiFetch('/api/settings/free-api-key/regenerate', { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['free-only-key'] }),
+  })
+
+  const apiKey = data?.apiKey ?? ''
+  const masked = apiKey ? apiKey.slice(0, 13) + '•'.repeat(32) : '…'
+  const baseUrl = import.meta.env.DEV
+    ? `http://${window.location.hostname}:${__SERVER_PORT__}/v1`
+    : `${window.location.origin}/v1`
+
+  function copy() {
+    navigator.clipboard.writeText(apiKey)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <section className="rounded-3xl border bg-card p-5">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <h2 className="text-sm font-medium">Free-only API key</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Same as the unified key but <span className="font-medium text-emerald-600 dark:text-emerald-400">restricted to free models</span>.
+            Only free models are visible in <code className="font-mono">/v1/models</code> and accessible via <code className="font-mono">/v1/chat/completions</code>.
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => regenerate.mutate()}
+          disabled={regenerate.isPending || isError}
+        >
+          Regenerate
+        </Button>
+      </div>
+
+      {isError ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+          Can't reach the server. Make sure the backend is running.
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <code className="flex-1 font-mono text-xs bg-muted px-3 py-2 rounded-lg select-all truncate tabular-nums">
+            {showKey ? apiKey : masked}
+          </code>
+          <Button variant="outline" size="sm" onClick={() => setShowKey(!showKey)}>
+            {showKey ? 'Hide' : 'Show'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <span className="text-muted-foreground">Base URL</span>
+        <code className="font-mono">{baseUrl}</code>
+        <span className="text-muted-foreground">Models</span>
+        <code className="font-mono">/v1/models <span className="text-muted-foreground">(free-only filtered)</span></code>
+        <span className="text-muted-foreground">Chat</span>
+        <code className="font-mono">/v1/chat/completions <span className="text-muted-foreground">(free-only routing)</span></code>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Quick-add preset cards — one-click enable for keyless providers,
+ * and click-to-fill for providers that need an API key.
+ */
+function QuickAddSection({
+  keys,
+  onQuickAdd,
+  addKey,
+}: {
+  keys: ApiKey[];
+  onQuickAdd: (platform: Platform) => void;
+  addKey: ReturnType<typeof useMutation<unknown, Error, { platform: string; key: string; label?: string }>>;
+}) {
+  const alreadyAdded = new Set(keys.map(k => k.platform))
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium mb-3">Quick-add providers</h2>
+
+      {/* Keyless (no API key needed) */}
+      {KEYLESS_PRESETS.length > 0 && (
+        <div className="mb-4">
+          <h3 className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+            <Zap className="size-3" />
+            Anonymous (no key needed) — one-click enable
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {KEYLESS_PRESETS.map(p => {
+              const done = alreadyAdded.has(p.value)
+              return (
+                <div
+                  key={p.value}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-colors ${
+                    done ? 'opacity-50 border-emerald-500/40 bg-emerald-500/10' : 'bg-card hover:bg-muted/60'
+                  }`}
+                >
+                  <span className={done ? 'text-emerald-500' : ''}>{p.label.replace(/ \(no key needed\)$/, '')}</span>
+                  {done ? (
+                    <span className="text-emerald-500">✓</span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      className="h-6 text-[11px]"
+                      onClick={() => addKey.mutate({ platform: p.value, key: '' })}
+                      disabled={addKey.isPending}
+                    >
+                      Enable
+                    </Button>
+                  )}
+                  <GetKeyLink url={p.url} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Key-required providers */}
+      <div>
+        <h3 className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+          <Sparkles className="size-3" />
+          Requires API key — click to auto-fill form above
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {KEY_REQUIRED_PRESETS.map(p => {
+            const done = alreadyAdded.has(p.value)
+            return (
+              <div
+                key={p.value}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-colors ${
+                  done ? 'opacity-50 border-emerald-500/40 bg-emerald-500/10' : 'bg-card hover:bg-muted/60 cursor-pointer'
+                }`}
+                onClick={() => !done && onQuickAdd(p.value)}
+              >
+                <span className={done ? 'text-emerald-500' : ''}>{p.label}</span>
+                {done ? (
+                  <span className="text-emerald-500">✓</span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">Select</span>
+                )}
+                <GetKeyLink url={p.url} />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function CustomProviderSection() {
   const queryClient = useQueryClient()
   const [baseUrl, setBaseUrl] = useState('')
@@ -207,7 +381,7 @@ function CustomProviderSection() {
         (most local servers don't need one).
       </p>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-3xl border p-4 bg-card">
-        <div className="space-y-1.5 flex-1 min-w-[240px]">
+        <div className="space-y-1.5 flex-1 min-w-[200px] w-full sm:w-auto">
           <Label className="text-xs">Base URL</Label>
           <Input
             value={baseUrl}
@@ -216,32 +390,32 @@ function CustomProviderSection() {
             className="font-mono text-xs"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 w-full sm:w-auto">
           <Label className="text-xs">Model</Label>
           <Input
             value={model}
             onChange={e => setModel(e.target.value)}
             placeholder="qwen3:4b"
-            className="w-[180px] font-mono text-xs"
+            className="w-full sm:w-[180px] font-mono text-xs"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 w-full sm:w-auto">
           <Label className="text-xs">Display name</Label>
           <Input
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="optional"
-            className="w-[150px]"
+            className="w-full sm:w-[150px]"
           />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 w-full sm:w-auto">
           <Label className="text-xs">API key</Label>
           <Input
             type="password"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
             placeholder="optional"
-            className="w-[150px] font-mono text-xs"
+            className="w-full sm:w-[150px] font-mono text-xs"
           />
         </div>
         <Button type="submit" size="sm" disabled={!baseUrl || !model || addCustom.isPending}>
@@ -362,6 +536,12 @@ export default function KeysPage() {
     }
   }, [editingKeyId])
 
+  const handleQuickAdd = (platform: Platform) => {
+    setPlatform(platform)
+    // Scroll the form into view so the user can paste their key
+    document.getElementById('add-key-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   const needsAccountId = platform === 'cloudflare'
   const isKeyless = PLATFORMS.find(p => p.value === platform)?.keyless ?? false
 
@@ -399,14 +579,17 @@ export default function KeysPage() {
 
       <div className="space-y-8">
         <UnifiedKeySection />
+        <FreeOnlyKeySection />
+
+        <QuickAddSection keys={keys} onQuickAdd={handleQuickAdd} addKey={addKey} />
 
         <section>
           <h2 className="text-sm font-medium mb-3">Add a provider key</h2>
-          <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 rounded-3xl border p-4 bg-card">
-            <div className="space-y-1.5">
+          <form id="add-key-form" onSubmit={handleSubmit} className="flex flex-wrap gap-3 rounded-3xl border p-4 bg-card">
+            <div className="space-y-1.5 w-full sm:w-auto">
               <Label className="text-xs">Platform</Label>
               <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-full sm:w-[220px]">
                   <SelectValue placeholder="Select provider" />
                 </SelectTrigger>
                 <SelectContent>
@@ -427,7 +610,7 @@ export default function KeysPage() {
                   value={accountId}
                   onChange={e => setAccountId(e.target.value)}
                   placeholder="a1b2c3d4…"
-                  className="w-[200px] font-mono text-xs"
+                  className="w-full sm:w-[200px] font-mono text-xs"
                 />
               </div>
             )}
@@ -454,7 +637,7 @@ export default function KeysPage() {
                   value={label}
                   onChange={e => setLabel(e.target.value)}
                   placeholder="optional"
-                  className="w-[160px]"
+                  className="w-full sm:w-[160px]"
                 />
                 <Button type="submit" size="sm" disabled={!platform || (!isKeyless && !apiKey) || (needsAccountId && !accountId) || addKey.isPending}>
                   {addKey.isPending ? 'Adding…' : isKeyless ? 'Enable' : 'Add key'}

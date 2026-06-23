@@ -285,6 +285,14 @@ playgroundRouter.get('/sessions/:id', (req, res) => {
   if (!row) return error(res, 404, 'Session not found.', 'not_found');
   const messages = getDb().prepare('SELECT * FROM playground_messages WHERE session_id = ? ORDER BY id ASC').all(id) as any[];
   
+  const fileSnapshots = getDb().prepare(
+    'SELECT id, file_path, before_content, after_content, created_at FROM playground_file_snapshots WHERE session_id = ? ORDER BY id ASC'
+  ).all(id) as any[];
+
+  const toolEvents = getDb().prepare(
+    'SELECT id, tool_name, arguments_json, result_json, status, created_at FROM playground_tool_events WHERE session_id = ? ORDER BY id ASC'
+  ).all(id) as any[];
+
   let claudeMd: string | null = null;
   if (row.project_path) {
     const claudePath = path.join(row.project_path, 'CLAUDE.md');
@@ -299,6 +307,8 @@ playgroundRouter.get('/sessions/:id', (req, res) => {
     ...mapSession(row),
     project: row.project_id ? { id: row.project_id, name: row.project_name, path: row.project_path } : null,
     messages: messages.map(mapMessage),
+    fileSnapshots,
+    toolEvents,
     claudeMd
   });
 });
@@ -335,7 +345,7 @@ playgroundRouter.post('/sessions/:id/messages', (req, res) => {
   `).run(id, parsed.data.role, parsed.data.content, parsed.data.meta ? JSON.stringify(parsed.data.meta) : null);
   getDb().prepare('UPDATE playground_sessions SET updated_at = datetime(\'now\') WHERE id = ?').run(id);
   if (parsed.data.role === 'user') {
-    autoRenameSession(id, parsed.data.content).catch(() => {});
+    autoRenameSession(id, parsed.data.content);
   }
   const row = getDb().prepare('SELECT * FROM playground_messages WHERE id = ?').get(result.lastInsertRowid) as any;
   res.status(201).json(mapMessage(row));

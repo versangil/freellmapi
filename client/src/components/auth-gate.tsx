@@ -65,6 +65,7 @@ function AuthForm({ mode, onAuthed }: { mode: 'setup' | 'login'; onAuthed: () =>
               id="auth-email"
               type="email"
               autoComplete="username"
+              required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -76,6 +77,8 @@ function AuthForm({ mode, onAuthed }: { mode: 'setup' | 'login'; onAuthed: () =>
               id="auth-password"
               type="password"
               autoComplete={isSetup ? 'new-password' : 'current-password'}
+              required
+              minLength={8}
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder={isSetup ? 'at least 8 characters' : 'your password'}
