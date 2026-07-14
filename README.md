@@ -93,7 +93,6 @@ Plus a **custom** provider — point at any OpenAI-compatible endpoint (llama.cp
 
 The scope is deliberately narrow. If a feature isn't on this list and isn't below, assume it isn't there yet.
 
-- **Image generation** (`/v1/images/*`)
 - **Audio / speech** (`/v1/audio/*`)
 - **Legacy completions** (`/v1/completions`) — only the chat endpoint is implemented
 - **Moderation** (`/v1/moderations`)
@@ -324,6 +323,19 @@ If no vision-capable model is enabled in your Fallback Chain, an image request r
 Works with `stream=True` as well — you'll get `delta.tool_calls` chunks followed by a `finish_reason: "tool_calls"` close. Under the hood, OpenAI-compatible providers (Groq, Cerebras, Mistral, OpenRouter, GitHub Models, HuggingFace, Cloudflare, Cohere compat) get the request passed through; Gemini requests get translated into Google's `functionDeclarations` / `functionResponse` shape and the response is translated back.
 
 Every response carries an `X-Routed-Via: <platform>/<model>` header so you can see which provider actually served each call. If a request fell over between providers, you'll also see `X-Fallback-Attempts: N`.
+
+### Image Generation
+
+`/v1/images/generations` is supported using Pollinations AI. It supports `response_format="url"` and `response_format="b64_json"`. Video generation is also exposed over the custom `/api/media/generate` endpoint.
+
+```python
+resp = client.images.generate(
+    prompt="A cute cat",
+    model="flux", # Optional
+    size="1024x1024",
+)
+print(resp.data[0].url)
+```
 
 ### Embeddings
 
