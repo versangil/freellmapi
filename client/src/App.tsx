@@ -43,10 +43,10 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `relative text-sm px-1 py-4 transition-colors ${
+        `relative text-sm px-3 py-2 mt-2 transition-all duration-200 ease-in-out rounded-md ${
           isActive
-            ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-foreground'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-secondary text-secondary-foreground font-medium shadow-sm'
+            : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
         }`
       }
     >
