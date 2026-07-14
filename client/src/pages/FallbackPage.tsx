@@ -51,7 +51,7 @@ interface FallbackEntry {
   isFree: boolean
 }
 
-type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'custom'
+type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'load_balanced' | 'custom'
 
 type RoutingWeights = { reliability: number; speed: number; intelligence: number }
 
@@ -82,6 +82,7 @@ const STRATEGIES: { key: RoutingStrategy; label: string; blurb: string }[] = [
   { key: 'smartest', label: 'Smartest', blurb: 'Prefer the most capable model that still works. Intelligence 55%, reliability 35%, speed 10%.' },
   { key: 'fastest', label: 'Fastest', blurb: 'Prefer the fastest model that still works. Speed 55%, reliability 35%, intelligence 10%.' },
   { key: 'reliable', label: 'Most reliable', blurb: 'Maximize success rate above all. Reliability 70%, speed and intelligence 15% each.' },
+  { key: 'load_balanced', label: 'Load Balanced', blurb: 'Prioritizes spreading requests safely among working models, avoiding rate limits. Reliability 90%, speed 5%, intelligence 5%.' },
   { key: 'custom', label: 'Custom', blurb: 'Set your own balance of reliability, speed and intelligence with sliders. Same engine as the presets, just your weights.' },
 ]
 
