@@ -187,6 +187,8 @@ docker compose up -d
 docker compose logs -f freellmapi
 ```
 
+Are you looking to host FreeLLMAPI on an open-source web hosting platform like Coolify, Dokku, or CapRover? Check out our [Open Source Web Hosting Guide](docs/open-source-hosting.md).
+
 By default the container's port is bound to `127.0.0.1` (localhost only). To reach the dashboard/API from another machine on your network, publish it on all interfaces with `HOST_BIND=0.0.0.0 docker compose up -d` — only on a trusted LAN, since the proxy is single-user.
 
 SQLite data is stored in the `freellmapi-data` volume at `/app/server/data`. Keep the same `.env` `ENCRYPTION_KEY` and volume when upgrading, because provider keys are encrypted at rest.
