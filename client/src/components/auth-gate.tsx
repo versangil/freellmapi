@@ -52,11 +52,11 @@ function AuthForm({ mode, onAuthed }: { mode: 'setup' | 'login'; onAuthed: () =>
         <span className="font-semibold tracking-tight text-sm">FreeLLMAPI</span>
       </div>
       <div className="rounded-3xl border bg-card p-6">
-        <h1 className="text-base font-medium">{isSetup ? 'Create your account' : 'Sign in'}</h1>
+        <h1 className="text-base font-medium">{isSetup ? 'Welcome to FreeLLMAPI' : 'Sign In to Dashboard'}</h1>
         <p className="text-xs text-muted-foreground mt-1 mb-4">
           {isSetup
-            ? 'Set the email and password that will protect this dashboard.'
-            : 'Sign in to manage your keys, routing, and analytics.'}
+            ? 'Create your secure admin account to manage LLM keys and routing.'
+            : 'Sign In to Dashboard to manage your keys, routing, and analytics.'}
         </p>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
@@ -86,7 +86,7 @@ function AuthForm({ mode, onAuthed }: { mode: 'setup' | 'login'; onAuthed: () =>
           </div>
           {error && <p className="text-destructive text-xs">{error}</p>}
           <Button type="submit" className="w-full" disabled={busy || !email || !password}>
-            {busy ? (isSetup ? 'Creating…' : 'Signing in…') : isSetup ? 'Create account' : 'Sign in'}
+            {busy ? (isSetup ? 'Creating…' : 'Signing in…') : isSetup ? 'Create account' : 'Sign In to Dashboard'}
           </Button>
         </form>
       </div>
