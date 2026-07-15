@@ -16,6 +16,34 @@ import { isFreeModel } from '../lib/models.js';
 
 export const proxyRouter = Router();
 
+// Unimplemented endpoints mentioned in SWOT Analysis
+proxyRouter.post('/completions', (req: Request, res: Response) => {
+  res.status(501).json({
+    error: {
+      message: 'Legacy completions (/v1/completions) are not supported. Use /v1/chat/completions instead.',
+      type: 'not_implemented',
+    },
+  });
+});
+
+proxyRouter.post('/images/generations', (req: Request, res: Response) => {
+  res.status(501).json({
+    error: {
+      message: 'Image generation (/v1/images/generations) is not yet supported.',
+      type: 'not_implemented',
+    },
+  });
+});
+
+proxyRouter.post('/audio/transcriptions', (req: Request, res: Response) => {
+  res.status(501).json({
+    error: {
+      message: 'Audio transcription (/v1/audio/transcriptions) is not yet supported.',
+      type: 'not_implemented',
+    },
+  });
+});
+
 // Virtual "auto" model. Clients like Hermes require a non-empty `model` field
 // on every request, but freellmapi's whole point is to pick the model itself.
 // Requesting this id means "let the router decide" — identical to omitting
