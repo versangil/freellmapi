@@ -1,0 +1,3 @@
+## 2025-02-23 - Added ARIA labels and titles to icon-only buttons
+**Learning:** Found several icon-only buttons in the Playground UI (e.g. expand/collapse projects, remove skills/presets) lacking proper `aria-label` or `title` attributes. Dynamic labels (e.g., changing between "Expand" and "Collapse" based on state) are critical for accurate screen reader announcements for toggles.
+**Action:** Consistently check `Button` and `button` elements holding only icons (`ChevronDown`, `X`, etc.) in interactive components for accessible names.
