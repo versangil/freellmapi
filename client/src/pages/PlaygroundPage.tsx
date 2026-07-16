@@ -1387,6 +1387,8 @@ async function deleteSession(sessionId: number) {
                             variant="ghost"
                             onClick={() => toggleProjectExpand(project.id)}
                             className="shrink-0"
+                            aria-label={isExpanded ? 'Collapse project' : 'Expand project'}
+                            title={isExpanded ? 'Collapse project' : 'Expand project'}
                           >
                             {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                           </Button>
@@ -1716,7 +1718,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.name}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" aria-label="Remove skill" title="Remove skill" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1734,7 +1736,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.label}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" aria-label="Remove preset" title="Remove preset" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
                       <X className="size-3" />
                     </button>
                   </Badge>
