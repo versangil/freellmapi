@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { PageHeader } from '@/components/page-header'
+import { Tooltip } from '@/components/tooltip'
 import type { ApiKey, Platform } from '../../../shared/types'
 import { Pencil, ExternalLink, Zap, Sparkles } from 'lucide-react'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
@@ -669,6 +670,7 @@ export default function KeysPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Switch
+                        aria-label={`Toggle all ${group.label} keys`}
                         checked={group.keys.some(k => k.enabled)}
                         onCheckedChange={(checked) =>
                           togglePlatform.mutate({ platform: group.value, enabled: checked })
@@ -718,9 +720,11 @@ export default function KeysPage() {
                             </span>
                           )}
                           {!isEditing && (
-                            <Button variant="ghost" size="xs" onClick={() => startEditing(k)}>
-                              <Pencil className="size-3" />
-                            </Button>
+                            <Tooltip text="Edit label">
+                              <Button variant="ghost" size="xs" onClick={() => startEditing(k)} aria-label="Edit label">
+                                <Pencil className="size-3" />
+                              </Button>
+                            </Tooltip>
                           )}
                           <Button variant="ghost" size="xs" onClick={() => checkKey.mutate(k.id)} disabled={checkKey.isPending}>
                             Check
