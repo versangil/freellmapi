@@ -718,7 +718,7 @@ export default function KeysPage() {
                             </span>
                           )}
                           {!isEditing && (
-                            <Button variant="ghost" size="xs" onClick={() => startEditing(k)}>
+                            <Button variant="ghost" size="xs" onClick={() => startEditing(k)} title="Edit key" aria-label="Edit key">
                               <Pencil className="size-3" />
                             </Button>
                           )}

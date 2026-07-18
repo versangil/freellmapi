@@ -1361,7 +1361,7 @@ async function deleteSession(sessionId: number) {
                   <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
                     <MessageSquare className="size-3.5" />
                   </Button>
-                  <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject}>
+                  <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
                     <Plus />
                   </Button>
                 </div>
@@ -1387,6 +1387,8 @@ async function deleteSession(sessionId: number) {
                             variant="ghost"
                             onClick={() => toggleProjectExpand(project.id)}
                             className="shrink-0"
+                            title="Toggle project"
+                            aria-label="Toggle project"
                           >
                             {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                           </Button>
@@ -1999,7 +2001,7 @@ async function deleteSession(sessionId: number) {
                 <FolderOpen className="text-primary size-5" />
                 <span>Select {browserMode === 'project' ? 'Project Folder' : 'Skill Path'}</span>
               </h2>
-              <Button size="icon" variant="ghost" onClick={() => setBrowserMode(null)}>
+              <Button size="icon" variant="ghost" onClick={() => setBrowserMode(null)} title="Close" aria-label="Close">
                 <X className="size-4" />
               </Button>
             </div>
@@ -2108,7 +2110,7 @@ async function deleteSession(sessionId: number) {
                 </h2>
                 <p className="text-[11px] font-mono text-muted-foreground">{activeDiffFile.filePath}</p>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => setActiveDiffFile(null)}>
+              <Button size="icon" variant="ghost" onClick={() => setActiveDiffFile(null)} title="Close" aria-label="Close">
                 <X className="size-4" />
               </Button>
             </div>
