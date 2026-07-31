@@ -55,6 +55,11 @@ interface FallbackEntry {
   keyCount: number
   contextWindow?: number | null
   isFree: boolean
+  autoDisabled?: boolean
+  autoDisabledUntil?: string | null
+  autoDisabledReason?: string | null
+  unhealthyCount?: number
+  lastUnhealthyAt?: string | null
 }
 
 interface PlaygroundProject {
@@ -450,7 +455,7 @@ export default function PlaygroundPage() {
     if (!activeSession || !activeSession.projectId) return null
     return projects.find(p => p.id === activeSession.projectId) ?? null
   }, [projects, activeSession])
-  const availableModels = fallbackEntries.filter(e => e.keyCount > 0 && e.enabled)
+  const availableModels = fallbackEntries.filter(e => e.keyCount > 0 && e.enabled && !e.autoDisabled)
   const estimatedTokens = useMemo(() => {
     let upload = 0
     let download = 0

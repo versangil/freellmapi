@@ -31,7 +31,7 @@ export interface RoutingWeights {
 // Strategy is either the legacy manual chain ('priority'), one of the bandit
 // presets, or 'custom' (a user-tuned weight vector persisted in settings — see
 // router.ts). Each is just a weight vector — the engine is identical.
-export type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'custom';
+export type RoutingStrategy = 'priority' | 'balanced' | 'smartest' | 'fastest' | 'reliable' | 'load_balanced' | 'custom';
 
 export const BANDIT_PRESETS: Record<Exclude<RoutingStrategy, 'priority' | 'custom'>, RoutingWeights> = {
   // Reliability leads; speed and intelligence split the rest evenly.
@@ -43,6 +43,8 @@ export const BANDIT_PRESETS: Record<Exclude<RoutingStrategy, 'priority' | 'custo
   fastest: { reliability: 0.35, speed: 0.55, intelligence: 0.1 },
   // Reliability dominates — for clients that just want it to work.
   reliable: { reliability: 0.7, speed: 0.15, intelligence: 0.15 },
+  // Distributes requests widely among working models to avoid rate limits
+  load_balanced: { reliability: 0.9, speed: 0.05, intelligence: 0.05 },
 };
 
 // Analytics-driven routing is on by default ('balanced'). Operators who want the

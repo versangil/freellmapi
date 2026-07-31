@@ -10,7 +10,9 @@ export const modelsRouter = Router();
 modelsRouter.get('/', (_req: Request, res: Response) => {
   const db = getDb();
   const models = db.prepare(`
-    SELECT m.*, fc.priority, fc.enabled as fallback_enabled
+    SELECT m.*, fc.priority, fc.enabled as fallback_enabled,
+           fc.auto_disabled_until_ms, fc.auto_disabled_reason,
+           fc.unhealthy_count, fc.last_unhealthy_at_ms
     FROM models m
     LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
     ORDER BY COALESCE(fc.priority, m.intelligence_rank) ASC
@@ -45,6 +47,11 @@ modelsRouter.get('/', (_req: Request, res: Response) => {
     supportsTools: m.supports_tools === 1,
     priority: m.priority,
     fallbackEnabled: m.fallback_enabled === 1,
+    autoDisabled: m.auto_disabled_until_ms != null && m.auto_disabled_until_ms > Date.now(),
+    autoDisabledUntil: m.auto_disabled_until_ms ? new Date(m.auto_disabled_until_ms).toISOString() : null,
+    autoDisabledReason: m.auto_disabled_reason,
+    unhealthyCount: m.unhealthy_count ?? 0,
+    lastUnhealthyAt: m.last_unhealthy_at_ms ? new Date(m.last_unhealthy_at_ms).toISOString() : null,
     hasProvider: hasProvider(m.platform),
     keyCount: keyCountMap.get(m.platform) ?? 0,
     paidInputPerM: m.paid_input_per_m,
