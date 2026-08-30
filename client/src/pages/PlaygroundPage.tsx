@@ -1342,13 +1342,13 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
+                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders" aria-label="Browse folders">
                   <FolderOpen className="size-4" />
                 </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
+                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project" aria-label="Open project">
                   <Plus className="size-4" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
+                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar" aria-label="Hide sidebar">
                   <PanelLeftClose className="size-4" />
                 </Button>
               </div>
@@ -1358,7 +1358,7 @@ async function deleteSession(sessionId: number) {
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-muted-foreground">Projects</span>
                 <div className="flex items-center gap-1">
-                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
+                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat" aria-label="New chat">
                     <MessageSquare className="size-3.5" />
                   </Button>
                   <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
@@ -1718,7 +1718,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.name}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted" aria-label="Remove skill">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1736,7 +1736,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.label}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted" aria-label="Remove skill">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1818,7 +1818,7 @@ async function deleteSession(sessionId: number) {
                 <Settings2 className="size-4 text-primary" />
                 <span>Project Detail</span>
               </div>
-              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel">
+              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel" aria-label="Hide panel">
                 <PanelRightClose className="size-3.5" />
               </Button>
             </div>
@@ -1947,10 +1947,10 @@ async function deleteSession(sessionId: number) {
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Imported Skills</div>
                   <div className="mb-2 flex gap-2">
                     <Input value={skillPath} onChange={e => setSkillPath(e.target.value)} placeholder="Path or folder" className="text-xs h-8 flex-1" />
-                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills">
+                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills" aria-label="Browse skills">
                       <FolderOpen className="size-3.5" />
                     </Button>
-                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill">
+                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill" aria-label="Import skill">
                       <Plus className="size-3.5" />
                     </Button>
                   </div>
