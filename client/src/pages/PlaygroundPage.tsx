@@ -1342,13 +1342,13 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
+                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders" aria-label="Browse folders">
                   <FolderOpen className="size-4" />
                 </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
+                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project" aria-label="Open project">
                   <Plus className="size-4" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
+                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar" aria-label="Hide sidebar">
                   <PanelLeftClose className="size-4" />
                 </Button>
               </div>
@@ -1358,7 +1358,7 @@ async function deleteSession(sessionId: number) {
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-muted-foreground">Projects</span>
                 <div className="flex items-center gap-1">
-                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
+                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat" aria-label="New chat">
                     <MessageSquare className="size-3.5" />
                   </Button>
                   <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
@@ -1404,7 +1404,7 @@ async function deleteSession(sessionId: number) {
                             size="icon-xs"
                             variant="ghost"
                             onClick={() => toggleProjectPin(project.id)}
-                            title={isPinned ? 'Unpin project' : 'Pin project'}
+                            title={isPinned ? 'Unpin project' : 'Pin project'} aria-label={isPinned ? 'Unpin project' : 'Pin project'}
                           >
                             {isPinned ? <Pin className="size-3.5 fill-primary text-primary" /> : <PinOff className="size-3.5" />}
                           </Button>
@@ -1412,7 +1412,7 @@ async function deleteSession(sessionId: number) {
                             size="icon-xs"
                             variant="ghost"
                             onClick={() => createSession(project)}
-                            title="New project chat"
+                            title="New project chat" aria-label="New project chat"
                           >
                             <Plus className="size-3.5" />
                           </Button>
@@ -1420,7 +1420,7 @@ async function deleteSession(sessionId: number) {
                             size="icon-xs"
                             variant="ghost"
                             onClick={() => deleteProjectWithUndo(project.id, project)}
-                            title="Delete project"
+                            title="Delete project" aria-label="Delete project"
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -1446,7 +1446,7 @@ async function deleteSession(sessionId: number) {
                                       size="icon-xs"
                                       variant="ghost"
                                       onClick={() => toggleSessionPin(session.id)}
-                                      title={isSessionPinned ? 'Unpin conversation' : 'Pin conversation'}
+                                      title={isSessionPinned ? 'Unpin conversation' : 'Pin conversation'} aria-label={isSessionPinned ? 'Unpin conversation' : 'Pin conversation'}
                                     >
                                       {isSessionPinned ? <Pin className="size-3 fill-primary text-primary" /> : <PinOff className="size-3" />}
                                     </Button>
@@ -1454,7 +1454,7 @@ async function deleteSession(sessionId: number) {
                                       size="icon-xs"
                                       variant="ghost"
                                       onClick={() => deleteSessionWithUndo(session.id, session)}
-                                      title="Delete conversation"
+                                      title="Delete conversation" aria-label="Delete conversation"
                                     >
                                       <Trash2 className="size-3" />
                                     </Button>
@@ -1494,7 +1494,7 @@ async function deleteSession(sessionId: number) {
                             size="icon-xs"
                             variant="ghost"
                             onClick={() => toggleSessionPin(session.id)}
-                            title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+                            title={isPinned ? 'Unpin conversation' : 'Pin conversation'} aria-label={isPinned ? 'Unpin conversation' : 'Pin conversation'}
                           >
                             {isPinned ? <Pin className="size-3 fill-primary text-primary" /> : <PinOff className="size-3" />}
                           </Button>
@@ -1502,7 +1502,7 @@ async function deleteSession(sessionId: number) {
                             size="icon-xs"
                             variant="ghost"
                             onClick={() => deleteSessionWithUndo(session.id, session)}
-                            title="Delete conversation"
+                            title="Delete conversation" aria-label="Delete conversation"
                           >
                             <Trash2 className="size-3" />
                           </Button>
@@ -1761,7 +1761,7 @@ async function deleteSession(sessionId: number) {
                 variant={wideLayout ? 'default' : 'outline'}
                 size="icon"
                 onClick={() => setWideLayout(v => !v)}
-                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'} aria-label={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
                 className="shrink-0"
               >
                 {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
@@ -1771,7 +1771,7 @@ async function deleteSession(sessionId: number) {
                 variant={compactView ? 'default' : 'outline'}
                 size="icon"
                 onClick={() => setCompactView(v => !v)}
-                title={compactView ? 'Disable compact view' : 'Enable compact view'}
+                title={compactView ? 'Disable compact view' : 'Enable compact view'} aria-label={compactView ? 'Disable compact view' : 'Enable compact view'}
               >
                 <span className="text-xs font-bold">C</span>
               </Button>
@@ -1818,7 +1818,7 @@ async function deleteSession(sessionId: number) {
                 <Settings2 className="size-4 text-primary" />
                 <span>Project Detail</span>
               </div>
-              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel">
+              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel" aria-label="Hide panel">
                 <PanelRightClose className="size-3.5" />
               </Button>
             </div>
@@ -1853,7 +1853,7 @@ async function deleteSession(sessionId: number) {
                         variant="outline"
                         onClick={() => handleSend()}
                         disabled={loading}
-                        title="Ask model to generate plan"
+                        title="Ask model to generate plan" aria-label="Ask model to generate plan"
                       >
                         <Sparkles className="size-3" />
                       </Button>
@@ -1866,7 +1866,7 @@ async function deleteSession(sessionId: number) {
                           setPlaygroundMode('goal')
                         }}
                         disabled={!planText.trim()}
-                        title="Use plan as Goal"
+                        title="Use plan as Goal" aria-label="Use plan as Goal"
                       >
                         <Code2 className="size-3" />
                       </Button>
@@ -1947,10 +1947,10 @@ async function deleteSession(sessionId: number) {
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Imported Skills</div>
                   <div className="mb-2 flex gap-2">
                     <Input value={skillPath} onChange={e => setSkillPath(e.target.value)} placeholder="Path or folder" className="text-xs h-8 flex-1" />
-                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills">
+                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills" aria-label="Browse skills">
                       <FolderOpen className="size-3.5" />
                     </Button>
-                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill">
+                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill" aria-label="Import skill">
                       <Plus className="size-3.5" />
                     </Button>
                   </div>
@@ -2013,7 +2013,7 @@ async function deleteSession(sessionId: number) {
                   size="icon-xs"
                   variant="ghost"
                   onClick={() => loadBrowserPath(browserData.parentPath!)}
-                  title="Go up one folder"
+                  title="Go up one folder" aria-label="Go up one folder"
                   className="mr-1"
                 >
                   <ChevronLeft className="size-4" />
