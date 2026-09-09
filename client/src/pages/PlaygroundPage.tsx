@@ -1519,7 +1519,7 @@ async function deleteSession(sessionId: number) {
                   const Icon = skill.icon
                   const active = selectedSkills.includes(skill.id)
                   return (
-                    <button key={skill.id} type="button" onClick={() => toggleSkill(skill.id)} className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted', active && 'bg-primary text-primary-foreground')}>
+                    <button key={skill.id} type="button" onClick={() => toggleSkill(skill.id)} aria-pressed={active} className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1', active && 'bg-primary text-primary-foreground')}>
                       <Icon />
                       <span className="truncate">{skill.label}</span>
                     </button>
@@ -1718,7 +1718,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.name}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label={`Remove skill ${skill.name}`} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1736,7 +1736,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.label}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label={`Remove preset ${skill.label}`} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1957,8 +1957,9 @@ async function deleteSession(sessionId: number) {
                   <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                     {importedSkills.map(skill => {
                       const id = `import:${skill.id}`
+                      const active = selectedSkills.includes(id)
                       return (
-                        <button key={skill.id} type="button" onClick={() => toggleSkill(id)} className={cn('rounded-lg px-2.5 py-2 text-left text-xs transition border hover:bg-muted/50', selectedSkills.includes(id) && 'bg-primary/5 border-primary/20 font-medium')}>
+                        <button key={skill.id} type="button" onClick={() => toggleSkill(id)} aria-pressed={active} className={cn('rounded-lg px-2.5 py-2 text-left text-xs transition border hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', active && 'bg-primary/5 border-primary/20 font-medium')}>
                           <div className="truncate text-foreground font-medium">{skill.name}</div>
                           <div className="truncate font-mono text-[9px] text-muted-foreground">{skill.path}</div>
                         </button>
