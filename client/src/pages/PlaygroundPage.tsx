@@ -1140,7 +1140,7 @@ async function deleteSession(sessionId: number) {
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="mt-1 text-xs text-muted-foreground hover:text-foreground"
+            className="mt-1 text-xs text-muted-foreground hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Show more
           </button>
@@ -1165,7 +1165,7 @@ async function deleteSession(sessionId: number) {
               type="button"
               onClick={() => setExpanded(e => !e)}
               aria-expanded={expanded}
-              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition hover:text-foreground"
+              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span>Model: {model ?? 'completion'}</span>
               {typeof latency === 'number' && <span>Latency: {latency}ms</span>}
@@ -1718,7 +1718,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.name}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label="Remove skill" className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1736,7 +1736,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.label}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label="Remove skill" className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <X className="size-3" />
                     </button>
                   </Badge>
