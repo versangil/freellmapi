@@ -1342,13 +1342,13 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
+                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders" aria-label="Browse folders">
                   <FolderOpen className="size-4" />
                 </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
+                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project" aria-label="Open project">
                   <Plus className="size-4" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
+                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar" aria-label="Hide sidebar">
                   <PanelLeftClose className="size-4" />
                 </Button>
               </div>
@@ -1358,7 +1358,7 @@ async function deleteSession(sessionId: number) {
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-muted-foreground">Projects</span>
                 <div className="flex items-center gap-1">
-                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
+                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat" aria-label="New chat">
                     <MessageSquare className="size-3.5" />
                   </Button>
                   <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
@@ -1547,6 +1547,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setLeftOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Projects"
                 >
                   <PanelLeftOpen className="size-4" />
                   <span className="hidden sm:inline">Projects</span>
@@ -1567,6 +1568,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setRightOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Context"
                 >
                   <PanelRightOpen className="size-4" />
                   <span className="hidden sm:inline">Context</span>
@@ -1762,6 +1764,7 @@ async function deleteSession(sessionId: number) {
                 size="icon"
                 onClick={() => setWideLayout(v => !v)}
                 title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                aria-label={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
                 className="shrink-0"
               >
                 {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
@@ -1772,16 +1775,17 @@ async function deleteSession(sessionId: number) {
                 size="icon"
                 onClick={() => setCompactView(v => !v)}
                 title={compactView ? 'Disable compact view' : 'Enable compact view'}
+                aria-label={compactView ? 'Disable compact view' : 'Enable compact view'}
               >
                 <span className="text-xs font-bold">C</span>
               </Button>
               {loading ? (
-                <Button onClick={handleStop} variant="destructive" className="gap-2">
+                <Button onClick={handleStop} variant="destructive" className="gap-2" aria-label="Stop">
                   <Square className="size-4" />
                   <span className="hidden sm:inline">Stop</span>
                 </Button>
               ) : (
-                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2">
+                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2" aria-label="Send">
                   <Send className="size-4" />
                   <span className="hidden sm:inline">Send</span>
                 </Button>
@@ -1818,7 +1822,7 @@ async function deleteSession(sessionId: number) {
                 <Settings2 className="size-4 text-primary" />
                 <span>Project Detail</span>
               </div>
-              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel">
+              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel" aria-label="Hide panel">
                 <PanelRightClose className="size-3.5" />
               </Button>
             </div>
@@ -1947,10 +1951,10 @@ async function deleteSession(sessionId: number) {
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Imported Skills</div>
                   <div className="mb-2 flex gap-2">
                     <Input value={skillPath} onChange={e => setSkillPath(e.target.value)} placeholder="Path or folder" className="text-xs h-8 flex-1" />
-                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills">
+                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills" aria-label="Browse skills">
                       <FolderOpen className="size-3.5" />
                     </Button>
-                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill">
+                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill" aria-label="Import skill">
                       <Plus className="size-3.5" />
                     </Button>
                   </div>
