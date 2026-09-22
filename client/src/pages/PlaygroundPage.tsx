@@ -40,6 +40,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tooltip } from '@/components/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -1342,15 +1343,21 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
-                  <FolderOpen className="size-4" />
-                </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
-                  <Plus className="size-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
-                  <PanelLeftClose className="size-4" />
-                </Button>
+                <Tooltip text="Browse folders" side="bottom">
+                  <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} aria-label="Browse folders">
+                    <FolderOpen className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Open project" side="bottom">
+                  <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} aria-label="Open project">
+                    <Plus className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Hide sidebar" side="bottom">
+                  <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} aria-label="Hide sidebar">
+                    <PanelLeftClose className="size-4" />
+                  </Button>
+                </Tooltip>
               </div>
             </div>
 
@@ -1358,12 +1365,16 @@ async function deleteSession(sessionId: number) {
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-muted-foreground">Projects</span>
                 <div className="flex items-center gap-1">
-                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
-                    <MessageSquare className="size-3.5" />
-                  </Button>
-                  <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
-                    <Plus />
-                  </Button>
+                  <Tooltip text="New chat" side="bottom">
+                    <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} aria-label="New chat">
+                      <MessageSquare className="size-3.5" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip text="New project chat" side="bottom">
+                    <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} aria-label="New project chat">
+                      <Plus />
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
 
