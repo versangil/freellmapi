@@ -38,6 +38,7 @@ import {
   type PlaygroundSkillId,
 } from '@/lib/playground-skills'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip } from '@/components/tooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -1342,15 +1343,21 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
-                  <FolderOpen className="size-4" />
-                </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
-                  <Plus className="size-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
-                  <PanelLeftClose className="size-4" />
-                </Button>
+                <Tooltip text="Browse folders">
+                  <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} aria-label="Browse folders">
+                    <FolderOpen className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text={!projectPath.trim() ? "Enter a path first" : "Open project"}>
+                  <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} aria-label="Open project">
+                    <Plus className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Hide sidebar">
+                  <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} aria-label="Hide sidebar">
+                    <PanelLeftClose className="size-4" />
+                  </Button>
+                </Tooltip>
               </div>
             </div>
 
