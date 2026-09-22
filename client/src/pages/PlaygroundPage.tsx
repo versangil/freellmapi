@@ -1547,6 +1547,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setLeftOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Toggle projects sidebar"
                 >
                   <PanelLeftOpen className="size-4" />
                   <span className="hidden sm:inline">Projects</span>
@@ -1567,6 +1568,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setRightOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Toggle context sidebar"
                 >
                   <PanelRightOpen className="size-4" />
                   <span className="hidden sm:inline">Context</span>
@@ -1776,12 +1778,12 @@ async function deleteSession(sessionId: number) {
                 <span className="text-xs font-bold">C</span>
               </Button>
               {loading ? (
-                <Button onClick={handleStop} variant="destructive" className="gap-2">
+                <Button onClick={handleStop} variant="destructive" className="gap-2" aria-label="Stop generation">
                   <Square className="size-4" />
                   <span className="hidden sm:inline">Stop</span>
                 </Button>
               ) : (
-                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2">
+                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2" aria-label="Send message">
                   <Send className="size-4" />
                   <span className="hidden sm:inline">Send</span>
                 </Button>
