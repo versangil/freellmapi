@@ -1718,7 +1718,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.name}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label={`Remove ${skill.name} skill`} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1736,7 +1736,7 @@ async function deleteSession(sessionId: number) {
                 return (
                   <Badge key={id} variant="secondary" className="h-7 gap-1 rounded-lg">
                     <span className="truncate">{skill.label}</span>
-                    <button type="button" onClick={() => toggleSkill(id)} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted">
+                    <button type="button" onClick={() => toggleSkill(id)} aria-label={`Remove ${skill.label} preset`} className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <X className="size-3" />
                     </button>
                   </Badge>
@@ -1958,7 +1958,7 @@ async function deleteSession(sessionId: number) {
                     {importedSkills.map(skill => {
                       const id = `import:${skill.id}`
                       return (
-                        <button key={skill.id} type="button" onClick={() => toggleSkill(id)} className={cn('rounded-lg px-2.5 py-2 text-left text-xs transition border hover:bg-muted/50', selectedSkills.includes(id) && 'bg-primary/5 border-primary/20 font-medium')}>
+                        <button key={skill.id} type="button" onClick={() => toggleSkill(id)} className={cn('rounded-lg px-2.5 py-2 text-left text-xs transition border hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', selectedSkills.includes(id) && 'bg-primary/5 border-primary/20 font-medium')}>
                           <div className="truncate text-foreground font-medium">{skill.name}</div>
                           <div className="truncate font-mono text-[9px] text-muted-foreground">{skill.path}</div>
                         </button>
