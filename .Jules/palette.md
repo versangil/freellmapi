@@ -1,3 +1,4 @@
 ## 2024-05-15 - Icon Button Tooltips and Labels
 **Learning:** Found multiple instances where small icon-only buttons lacked `aria-label` or `title`, which hinders screen-reader and tooltip experiences.
 **Action:** Always verify `<Button size="icon" />` and `<Button size="icon-xs" />` have an accessible label or title attached when maintaining existing code in this repository.
+## 2026-10-11 - [ARIA labels on Playground icon-only buttons]\n**Learning:** The Playground page has a lot of interactive controls representing features (like 'Open project', 'Toggle project', 'Browse skills'). Though tooltips (via the native 'title' attribute) exist, lacking 'aria-label' means screen readers might just announce 'button' for all these diverse and critical interactions. \n**Action:** Always map the 'title' attribute to an explicit 'aria-label' for size='icon' and size='icon-xs' buttons that lack text content inside.
