@@ -159,6 +159,9 @@ describe('OpenAI multimodal array content', () => {
   // of a session because their follow-up history carries shapes the strict
   // schema rejected. Each case below is a real second-turn payload pattern.
   describe('agent second-turn shapes (#200)', () => {
+    // Increase timeout since multiple backend/fetch mocks can take time on slow CI
+    vi.setConfig({ testTimeout: 10000 });
+
     it('accepts Gemini-part-style content blocks without a type field', async () => {
       const { status, body } = await request(app, 'POST', '/v1/chat/completions', {
         messages: [
