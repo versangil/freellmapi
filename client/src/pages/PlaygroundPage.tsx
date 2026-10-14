@@ -44,6 +44,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Markdown } from '@/components/markdown'
+import { Tooltip } from '@/components/tooltip'
 import { cn } from '@/lib/utils'
 
 interface FallbackEntry {
@@ -1342,15 +1343,21 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
-                  <FolderOpen className="size-4" />
-                </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
-                  <Plus className="size-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
-                  <PanelLeftClose className="size-4" />
-                </Button>
+                <Tooltip text="Browse folders">
+                  <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} aria-label="Browse folders">
+                    <FolderOpen className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Open project">
+                  <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} aria-label="Open project">
+                    <Plus className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Hide sidebar">
+                  <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} aria-label="Hide sidebar">
+                    <PanelLeftClose className="size-4" />
+                  </Button>
+                </Tooltip>
               </div>
             </div>
 
@@ -1358,12 +1365,16 @@ async function deleteSession(sessionId: number) {
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase text-muted-foreground">Projects</span>
                 <div className="flex items-center gap-1">
-                  <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} title="New chat">
-                    <MessageSquare className="size-3.5" />
-                  </Button>
-                  <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} title="New project chat" aria-label="New project chat">
-                    <Plus />
-                  </Button>
+                  <Tooltip text="New chat">
+                    <Button size="icon-xs" variant="ghost" onClick={() => createConversation()} aria-label="New chat">
+                      <MessageSquare className="size-3.5" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip text="New project chat">
+                    <Button size="icon-xs" variant="ghost" onClick={() => createSession(activeProject)} disabled={!activeProject} aria-label="New project chat">
+                      <Plus />
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
 
@@ -1818,9 +1829,11 @@ async function deleteSession(sessionId: number) {
                 <Settings2 className="size-4 text-primary" />
                 <span>Project Detail</span>
               </div>
-              <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} title="Hide panel">
-                <PanelRightClose className="size-3.5" />
-              </Button>
+              <Tooltip text="Hide panel" side="bottom">
+                <Button size="icon-xs" variant="ghost" onClick={() => setRightOpen(false)} aria-label="Hide panel">
+                  <PanelRightClose className="size-3.5" />
+                </Button>
+              </Tooltip>
             </div>
             <div className="flex rounded-lg border bg-muted/40 p-0.5">
               {(['context', 'changes', 'activity'] as const).map(tab => (
@@ -1947,12 +1960,16 @@ async function deleteSession(sessionId: number) {
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Imported Skills</div>
                   <div className="mb-2 flex gap-2">
                     <Input value={skillPath} onChange={e => setSkillPath(e.target.value)} placeholder="Path or folder" className="text-xs h-8 flex-1" />
-                    <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} title="Browse skills">
-                      <FolderOpen className="size-3.5" />
-                    </Button>
-                    <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} title="Import skill">
-                      <Plus className="size-3.5" />
-                    </Button>
+                    <Tooltip text="Browse skills">
+                      <Button size="icon-xs" variant="outline" onClick={() => openPathBrowser('skill')} aria-label="Browse skills">
+                        <FolderOpen className="size-3.5" />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip text="Import skill">
+                      <Button size="icon-xs" onClick={importSkill} disabled={!skillPath.trim()} aria-label="Import skill">
+                        <Plus className="size-3.5" />
+                      </Button>
+                    </Tooltip>
                   </div>
                   <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                     {importedSkills.map(skill => {
@@ -2001,9 +2018,11 @@ async function deleteSession(sessionId: number) {
                 <FolderOpen className="text-primary size-5" />
                 <span>Select {browserMode === 'project' ? 'Project Folder' : 'Skill Path'}</span>
               </h2>
-              <Button size="icon" variant="ghost" onClick={() => setBrowserMode(null)} title="Close" aria-label="Close">
-                <X className="size-4" />
-              </Button>
+              <Tooltip text="Close" side="bottom">
+                <Button size="icon" variant="ghost" onClick={() => setBrowserMode(null)} aria-label="Close">
+                  <X className="size-4" />
+                </Button>
+              </Tooltip>
             </div>
 
             {/* Path Breadcrumbs */}
@@ -2110,9 +2129,11 @@ async function deleteSession(sessionId: number) {
                 </h2>
                 <p className="text-[11px] font-mono text-muted-foreground">{activeDiffFile.filePath}</p>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => setActiveDiffFile(null)} title="Close" aria-label="Close">
-                <X className="size-4" />
-              </Button>
+              <Tooltip text="Close" side="bottom">
+                <Button size="icon" variant="ghost" onClick={() => setActiveDiffFile(null)} aria-label="Close">
+                  <X className="size-4" />
+                </Button>
+              </Tooltip>
             </div>
 
             <div className="flex-1 overflow-y-auto bg-muted/20 p-4 font-mono text-xs leading-relaxed">

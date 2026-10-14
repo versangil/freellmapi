@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { PageHeader } from '@/components/page-header'
+import { Tooltip } from '@/components/tooltip'
 import type { ApiKey, Platform } from '../../../shared/types'
 import { Pencil, ExternalLink, Zap, Sparkles } from 'lucide-react'
 import { formatSqliteUtcToLocalTime } from '@/lib/utils'
@@ -718,9 +719,11 @@ export default function KeysPage() {
                             </span>
                           )}
                           {!isEditing && (
-                            <Button variant="ghost" size="xs" onClick={() => startEditing(k)} title="Edit key" aria-label="Edit key">
-                              <Pencil className="size-3" />
-                            </Button>
+                            <Tooltip text="Edit key">
+                              <Button variant="ghost" size="xs" onClick={() => startEditing(k)} aria-label="Edit key">
+                                <Pencil className="size-3" />
+                              </Button>
+                            </Tooltip>
                           )}
                           <Button variant="ghost" size="xs" onClick={() => checkKey.mutate(k.id)} disabled={checkKey.isPending}>
                             Check
