@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Tooltip } from '@/components/tooltip'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -718,9 +719,11 @@ export default function KeysPage() {
                             </span>
                           )}
                           {!isEditing && (
-                            <Button variant="ghost" size="xs" onClick={() => startEditing(k)} title="Edit key" aria-label="Edit key">
-                              <Pencil className="size-3" />
-                            </Button>
+                            <Tooltip text="Edit key">
+                              <Button variant="ghost" size="xs" onClick={() => startEditing(k)} aria-label="Edit key">
+                                <Pencil className="size-3" />
+                              </Button>
+                            </Tooltip>
                           )}
                           <Button variant="ghost" size="xs" onClick={() => checkKey.mutate(k.id)} disabled={checkKey.isPending}>
                             Check
