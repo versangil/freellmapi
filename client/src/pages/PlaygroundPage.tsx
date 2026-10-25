@@ -39,6 +39,7 @@ import {
 } from '@/lib/playground-skills'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip } from '@/components/tooltip'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
@@ -1342,15 +1343,21 @@ async function deleteSession(sessionId: number) {
             <div className="border-b p-3">
               <div className="flex gap-2">
                 <Input value={projectPath} onChange={e => setProjectPath(e.target.value)} placeholder="D:\\path\\to\\project" className="flex-1" />
-                <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} title="Browse folders">
-                  <FolderOpen className="size-4" />
-                </Button>
-                <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} title="Open project">
-                  <Plus className="size-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} title="Hide sidebar">
-                  <PanelLeftClose className="size-4" />
-                </Button>
+                <Tooltip text="Browse folders">
+                  <Button size="icon" variant="outline" onClick={() => openPathBrowser('project')} aria-label="Browse folders">
+                    <FolderOpen className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Open project">
+                  <Button size="icon" onClick={openProject} disabled={!projectPath.trim()} aria-label="Open project">
+                    <Plus className="size-4" />
+                  </Button>
+                </Tooltip>
+                <Tooltip text="Hide sidebar">
+                  <Button size="icon" variant="ghost" onClick={() => setLeftOpen(false)} aria-label="Hide sidebar">
+                    <PanelLeftClose className="size-4" />
+                  </Button>
+                </Tooltip>
               </div>
             </div>
 
@@ -1756,25 +1763,29 @@ async function deleteSession(sessionId: number) {
                 placeholder={activeProject ? `Ask ${activeProject.name} to inspect, edit, test, or explain...` : 'Start a conversation without a project...'}
                 className="max-h-40 min-h-12 flex-1"
               />
-              <Button
-                type="button"
-                variant={wideLayout ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setWideLayout(v => !v)}
-                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
-                className="shrink-0"
-              >
-                {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-              </Button>
-              <Button
-                type="button"
-                variant={compactView ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setCompactView(v => !v)}
-                title={compactView ? 'Disable compact view' : 'Enable compact view'}
-              >
-                <span className="text-xs font-bold">C</span>
-              </Button>
+              <Tooltip text={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}>
+                <Button
+                  type="button"
+                  variant={wideLayout ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setWideLayout(v => !v)}
+                  aria-label={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                  className="shrink-0"
+                >
+                  {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              </Tooltip>
+              <Tooltip text={compactView ? 'Disable compact view' : 'Enable compact view'}>
+                <Button
+                  type="button"
+                  variant={compactView ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setCompactView(v => !v)}
+                  aria-label={compactView ? 'Disable compact view' : 'Enable compact view'}
+                >
+                  <span className="text-xs font-bold">C</span>
+                </Button>
+              </Tooltip>
               {loading ? (
                 <Button onClick={handleStop} variant="destructive" className="gap-2">
                   <Square className="size-4" />
