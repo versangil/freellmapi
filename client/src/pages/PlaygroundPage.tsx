@@ -40,6 +40,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tooltip } from '@/components/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -1756,25 +1757,29 @@ async function deleteSession(sessionId: number) {
                 placeholder={activeProject ? `Ask ${activeProject.name} to inspect, edit, test, or explain...` : 'Start a conversation without a project...'}
                 className="max-h-40 min-h-12 flex-1"
               />
-              <Button
-                type="button"
-                variant={wideLayout ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setWideLayout(v => !v)}
-                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
-                className="shrink-0"
-              >
-                {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-              </Button>
-              <Button
-                type="button"
-                variant={compactView ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setCompactView(v => !v)}
-                title={compactView ? 'Disable compact view' : 'Enable compact view'}
-              >
-                <span className="text-xs font-bold">C</span>
-              </Button>
+              <Tooltip text={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}>
+                <Button
+                  type="button"
+                  variant={wideLayout ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setWideLayout(v => !v)}
+                  aria-label={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                  className="shrink-0"
+                >
+                  {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              </Tooltip>
+              <Tooltip text={compactView ? 'Disable compact view' : 'Enable compact view'}>
+                <Button
+                  type="button"
+                  variant={compactView ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setCompactView(v => !v)}
+                  aria-label={compactView ? 'Disable compact view' : 'Enable compact view'}
+                >
+                  <span className="text-xs font-bold">C</span>
+                </Button>
+              </Tooltip>
               {loading ? (
                 <Button onClick={handleStop} variant="destructive" className="gap-2">
                   <Square className="size-4" />
