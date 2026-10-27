@@ -37,6 +37,7 @@ import {
   detectPlaygroundSkills,
   type PlaygroundSkillId,
 } from '@/lib/playground-skills'
+import { Tooltip } from '@/components/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1547,6 +1548,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setLeftOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Projects"
                 >
                   <PanelLeftOpen className="size-4" />
                   <span className="hidden sm:inline">Projects</span>
@@ -1567,6 +1569,7 @@ async function deleteSession(sessionId: number) {
                   variant="default"
                   onClick={() => setRightOpen(true)}
                   className="gap-2 shadow-md"
+                  aria-label="Context"
                 >
                   <PanelRightOpen className="size-4" />
                   <span className="hidden sm:inline">Context</span>
@@ -1756,32 +1759,36 @@ async function deleteSession(sessionId: number) {
                 placeholder={activeProject ? `Ask ${activeProject.name} to inspect, edit, test, or explain...` : 'Start a conversation without a project...'}
                 className="max-h-40 min-h-12 flex-1"
               />
-              <Button
-                type="button"
-                variant={wideLayout ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setWideLayout(v => !v)}
-                title={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
-                className="shrink-0"
-              >
-                {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-              </Button>
-              <Button
-                type="button"
-                variant={compactView ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setCompactView(v => !v)}
-                title={compactView ? 'Disable compact view' : 'Enable compact view'}
-              >
-                <span className="text-xs font-bold">C</span>
-              </Button>
+              <Tooltip text={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}>
+                <Button
+                  type="button"
+                  variant={wideLayout ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setWideLayout(v => !v)}
+                  aria-label={wideLayout ? 'Disable wide layout' : 'Enable wide layout'}
+                  className="shrink-0"
+                >
+                  {wideLayout ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                </Button>
+              </Tooltip>
+              <Tooltip text={compactView ? 'Disable compact view' : 'Enable compact view'}>
+                <Button
+                  type="button"
+                  variant={compactView ? 'default' : 'outline'}
+                  size="icon"
+                  onClick={() => setCompactView(v => !v)}
+                  aria-label={compactView ? 'Disable compact view' : 'Enable compact view'}
+                >
+                  <span className="text-xs font-bold">C</span>
+                </Button>
+              </Tooltip>
               {loading ? (
-                <Button onClick={handleStop} variant="destructive" className="gap-2">
+                <Button onClick={handleStop} variant="destructive" className="gap-2" aria-label="Stop">
                   <Square className="size-4" />
                   <span className="hidden sm:inline">Stop</span>
                 </Button>
               ) : (
-                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2">
+                <Button onClick={handleSend} disabled={!input.trim()} className="gap-2" aria-label="Send">
                   <Send className="size-4" />
                   <span className="hidden sm:inline">Send</span>
                 </Button>
